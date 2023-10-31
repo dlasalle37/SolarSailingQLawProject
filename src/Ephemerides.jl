@@ -27,7 +27,7 @@ function getInitialState(t0, targID)
         t0: initial epoch in time past j2000 [s]
     OUTPUTS:
         trueAnom: true anomaly [radians]
-        dist: sun->target body
+        dist: sun->target body [km]
     =#
 
     (X1, ~) = spkez(targID, t0, "ECLIPJ2000", "none", 10);
