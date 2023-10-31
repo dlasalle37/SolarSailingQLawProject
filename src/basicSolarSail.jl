@@ -65,7 +65,7 @@ function solarSailEOM_cartesian!(dx, x, p, t)
     G0 = 1.02E14
     sHat = [-0.98, 0.1, 0.1]/norm([-0.98, 0.1, 0.1])
     sunDist = 1.46E8
-    (sHat, sunDist, R) = earth_helocentric_state(epoch+t)
+    (sHat, sunDist) = earth_helocentric_state(epoch+t)
     α = pi - acos(dot(nHat, sHat))  # alpha is the angle b/w the anti-sunlight direction and nHat
     a_SRP = A*G0/(sunDist^2)*cos(α)*(-(C1*cos(α)+C2)*nHat + C3*sHat)
 
@@ -92,7 +92,8 @@ function gauss_variational_eqn!(dx, x, params, t)
     mu = params[1]
     sc = params[2]
     u = params[3]  # control inputs, alpha and beta
-    epoch = params[4] #start date of propagation , et
+    eph = params[4]  # ephemeride (contains start date)
+    epoch = eph.t0 #start date of propagation , et
     α = u[1]  # cone angle
     β = u[2]  # clock angle
 
@@ -113,7 +114,7 @@ function gauss_variational_eqn!(dx, x, params, t)
     end
     state = (a, e, inc, argPer, RAAN, trueAnom)
     # get the acceleration:
-    a_SRP_O = aSRP_orbitFrame(state, α, β, sc, epoch+t, mu);  # SRP acceleration resolved into the O (orbit) frame where O{s/c, er_hat, eθ_hat, eh_hat}
+    a_SRP_O = aSRP_orbitFrame(state, α, β, sc, epoch+t, eph);  # SRP acceleration resolved into the O (orbit) frame where O{s/c, er_hat, eθ_hat, eh_hat}
 
     # Calculate some necessary parameters for Gauss's Variational Equations:
     p = a*(1-e^2)  # s/c semi-latus [km]
@@ -157,14 +158,14 @@ function gauss_variational_eqn!(dx, x, params, t)
     =#
 end    
 
-function aSRP_orbitFrame(spacecraftState, α::Float64, β::Float64, sc::basicSolarSail, time::Float64, mu::Float64)
+function aSRP_orbitFrame(spacecraftState, α::Float64, β::Float64, sc::basicSolarSail, time::Float64, eph::TwoBodyEphemeride)
     #=
     INPUTS:
         spacecraftState: current Keplerian orbital elements of s/c
         α: cone angle (radians)
         β: clock angle (radians)
         sc: solar sail struct 
-        time: et to calculate SRP at
+        time: time past j2000 to calculate SRP
         mu: grav parameter of central body [km^3/s^2]
     OUTPUTS:
         aSRP_oFrame: acceleration vector in the orbit frame [km/s^2]
@@ -175,7 +176,8 @@ function aSRP_orbitFrame(spacecraftState, α::Float64, β::Float64, sc::basicSol
     RAAN = spacecraftState[5]; trueAnom = spacecraftState[6];
 
     G0 = 1.02E14 # solar flux constant at earth
-    (~, d) = sunToEarth(time)
+    trueAnom_earth = get_heliocentric_position(eph, time)
+    d = distance_to_sun(eph, trueAnom_earth)
     C1 = sc.C[1]; C2 = sc.C[2]; C3 = sc.C[3]
     a1 = C1*(cos(α))^2+C2*cos(α)+C3  # sun frame r-direction, not scaled
     a2 = -(C1*cos(α)+C2)*sin(α)sin(β)  # sun frame theta-direction, not scaled
@@ -184,7 +186,6 @@ function aSRP_orbitFrame(spacecraftState, α::Float64, β::Float64, sc::basicSol
 
     # Now, create rotation matrix from sun frame to orbit frame
     # R_S_0 = R3(trueAnom + argPer)*R1(inc)*R3(lambda)
-    trueAnom_earth = earth_true_anomaly(time)
     lambda = RAAN-trueAnom_earth
     ang = trueAnom + argPer;
     R3a = [cos(ang) sin(ang) 0; -sin(ang) cos(ang) 0; 0 0 1]

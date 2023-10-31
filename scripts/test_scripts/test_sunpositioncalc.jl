@@ -3,13 +3,16 @@ using DrWatson
 
 include(srcdir("Includes.jl"))
 epoch = "2018-06-06T20:45:00"
-et = utc2et(epoch)
-
-tspan = 1:24*3600:3*360*24*3600
+eti = utc2et(epoch)
+simTime =3*360*24*3600
+etf = eti+simTime
+tspan = 1:24*3600:simTime
+ephemeride = twoBodyEarthEphemeride(eti, etf)
 k=1
 dist = zeros(length(collect(tspan)))
 for i in tspan
-    (~, dist[k]) = sunToEarth(et+i)
+    nu = get_heliocentric_position(ephemeride, eti+i)
+    dist[k] = distance_to_sun(ephemeride, nu)
     global k+=1
 end
 

@@ -135,19 +135,7 @@ function coe2rv(a::Float64, e::Float64, i::Float64, w::Float64, RAAN::Float64, n
     return r, v
 end
 
-function earth_true_anomaly(et)
-    #= 
-    Calls spice to calculate the true anomaly of earth at a given et (time past J2000)
-    =#
-    (X1, ~) = spkez(399, et, "ECLIPJ2000", "none", 10); # get earth [r; v] at time "et"
-    rES_vec = X1[1:3]; vES_vec = X1[4:6]  # split state vector X1 into r, v
-    earth_coe = rv2coe(rES_vec, vES_vec, 1.327E11)  # earth's keplerian orbital elements in its heliocentric orbit
-
-    ν = earth_coe[6]  # pull out true anomaly
-    return  ν
-end
-
-function sunToEarth(et)
+function get_sunlight_direction(et)
     #= 
     Calls the SPICE toolkit to calculate the position of the earth WRT the sun expressed in the J2000 Frame.
     Since this vector points to the Earth, this will give the sunlight direction and the radial distance to the earth
@@ -168,3 +156,60 @@ function sunToEarth(et)
 
 end
 
+function get_heliocentric_position(eph::TwoBodyEphemeride, tf; tol=1.0E-6)
+    #=
+    INPUTS: 
+    eph: ephemeride struct containing the initial time and position info of earth in helio orbit
+    tf: current time, seconds past j2000
+
+    OUTPUTS:
+        trueAnom: current position of eph.targID in its heliocentric orbit
+    =#
+    mu = MU_SUN
+    t0 = eph.t0;
+    t = tf-t0
+    νi = eph.trueAnom_initial
+    a = eph.semiMajorAxis
+    e = eph.eccentricity
+
+    # use keplers equation for ellipses to calculate current position
+    n = sqrt(mu/a^3)
+    M = n*t  # current mean anomaly to calculate to
+    E0 = 2*atan(sqrt((1-e)/(1+e))*tan(νi/2))  # initial eccentric anomaly
+    M0 = E0 - e*sin(E0)
+
+    #Use newton's method to calculate E at t;
+    done = false
+    Ek = M  # initial guess
+    while !done
+        nextGuess = Ek + (M0 + M - Ek + e*sin(Ek))/(1-e*cos(Ek))
+        err = abs(nextGuess-Ek)
+
+        if err <= tol
+            Ek = nextGuess
+            done = true
+        else
+            Ek = nextGuess
+            done = false
+        end
+    end
+    E=Ek
+    νf = 2*atan(sqrt((1+e)/(1-e)) * tan(E/2))
+    return νf
+end
+
+function distance_to_sun(eph::TwoBodyEphemeride, nu::Float64)
+    #=
+    Calculates the planet-sun distance based on earth's current true anomaly
+    INPUTS:
+        eph: TwoBodyEphemeride with target as planet and observer as sun
+        nu: true anomaly to calculate distance at [radians]
+    OUTPUTS:
+        dist: distance to sun [km]
+    =#
+    a = eph.semiMajorAxis
+    e = eph.eccentricity
+
+    dist = a*(1-e^2)/(1+e*cos(nu))  # trajectory equation
+    return dist
+end

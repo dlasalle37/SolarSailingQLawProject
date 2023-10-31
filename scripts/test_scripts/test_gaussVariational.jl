@@ -12,7 +12,7 @@ eph = twoBodyEarthEphemeride(startTime, endTime)  # create the earth ephemeride
 sc = basicSolarSail()
 mu = 398600.4418;
 u = [30*pi/180, 0.0*pi/180]  # alpha and beta control parameters
-p = (mu, sc, u, startTime) # parameter set for ODE solver
+p = (mu, sc, u, eph) # parameter set for ODE solver
 X0 = [42164.0; 0.00; 0.001*pi/180; 0.00; 0.0; 0.0]  # COE initial conditions [a, e, i, argPer, RAAN, trueAnom]
 tspan = (0, simTime)
 
