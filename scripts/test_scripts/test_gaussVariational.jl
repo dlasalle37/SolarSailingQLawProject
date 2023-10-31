@@ -2,22 +2,19 @@ using DrWatson
 @quickactivate "SolarSailingQLawProject"
 include(srcdir("Includes.jl"))
 
-## SPICE SETUP
-furnsh("naif0012.tls")
-furnsh("de440.bsp")
-## END SPICE SETUP
-
+# Simulation time setup:
 date = "2023-03-01T12:30:00" 
-epoch = utc2et(date)  # start date
+startTime = utc2et(date)  # start date in seconds past j2000
+simTime = 150.0*24*3600 # amount of time [s] to simulate for
+endTime = startTime+simTime
 
-# Compute earth coe at current time
-ν_earth = earth_true_anomaly(epoch)
+eph = twoBodyEarthEphemeride(startTime, endTime)  # create the earth ephemeride
 sc = basicSolarSail()
 mu = 398600.4418;
-u = [90*pi/180, 0.0*pi/180]  # alpha and beta control parameters
-p = (mu, sc, u, epoch) # parameter set for ODE solver
+u = [30*pi/180, 0.0*pi/180]  # alpha and beta control parameters
+p = (mu, sc, u, startTime) # parameter set for ODE solver
 X0 = [42164.0; 0.00; 0.001*pi/180; 0.00; 0.0; 0.0]  # COE initial conditions [a, e, i, argPer, RAAN, trueAnom]
-tspan = (0, 150.0*24*3600)
+tspan = (0, simTime)
 
 # Tolerances
 reltol=1.0E-6

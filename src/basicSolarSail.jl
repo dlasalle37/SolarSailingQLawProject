@@ -1,6 +1,5 @@
 using LinearAlgebra
 using SPICE
-include("utils.jl")
 
 struct basicSolarSail
     areaParam::Float64
