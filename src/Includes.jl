@@ -5,6 +5,7 @@
 using DifferentialEquations
 using Plots
 using SPICE
+using StaticArrays
 
 #Includes
 include("constants.jl")
@@ -15,7 +16,3 @@ include("utils.jl")
 
 
 # Setups
-## SPICE SETUP
-furnsh("naif0012.tls")
-furnsh("de440.bsp")
-## END SPICE SETUP

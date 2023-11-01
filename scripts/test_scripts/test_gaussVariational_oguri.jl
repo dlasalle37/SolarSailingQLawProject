@@ -2,6 +2,11 @@ using DrWatson
 @quickactivate "SolarSailingQLawProject"
 include(srcdir("Includes.jl"))
 
+## SPICE SETUP
+furnsh("naif0012.tls")
+furnsh("de440.bsp")
+## END SPICE SETUP
+
 # Simulation time setup:
 date = "2023-03-01T12:30:00" 
 startTime = utc2et(date)  # start date in seconds past j2000

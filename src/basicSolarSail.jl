@@ -49,10 +49,11 @@ end
 
 function solarSailEOM_cartesian!(dx, x, p, t)
     #Unpack Parameters and current step values
-        # paramter set p is organized as [mu, ::basicSolarSail, epoch]
-    mu = p[1] # first value of parameter tuple is mu 
+        # paramter set p is organized as [mu, ::basicSolarSail, ::TwoBodyEphemeride]
+    mu = p[1]
     sc = p[2]
-    epoch = p[3]
+    eph = p[3]
+    epoch = eph.t0
     rVec = x[1:3]
     vVec = x[4:6]
     r = norm(rVec)
@@ -63,9 +64,8 @@ function solarSailEOM_cartesian!(dx, x, p, t)
     A = sc.areaParam
     nHat = [1; 0; 0]  # sail vector aligned with inertial x
     G0 = 1.02E14
-    sHat = [-0.98, 0.1, 0.1]/norm([-0.98, 0.1, 0.1])
     sunDist = 1.46E8
-    (sHat, sunDist) = earth_helocentric_state(epoch+t)
+    (sHat, sunDist) = get_sunlight_direction(epoch+t)  # sHat expressed in ECI frame
     α = pi - acos(dot(nHat, sHat))  # alpha is the angle b/w the anti-sunlight direction and nHat
     a_SRP = A*G0/(sunDist^2)*cos(α)*(-(C1*cos(α)+C2)*nHat + C3*sHat)
 
@@ -76,8 +76,8 @@ function solarSailEOM_cartesian!(dx, x, p, t)
     end
 
     # EOM
-    dx[1:3] = vVec
-    dx[4:6] = -mu/r^3 * rVec + a_SRP
+    dx[1:3] .= vVec
+    dx[4:6] .= -mu/r^3 * rVec + a_SRP
 end
 
 function aSRP_orbitFrame(spacecraftState, α::Float64, β::Float64, sc::basicSolarSail, time::Float64, eph::TwoBodyEphemeride; method=:Oguri)
@@ -187,7 +187,7 @@ function gauss_variational_eqn!(dx, x, params, t)
         p*cos(trueAnom)/e -(p+r)*sin(trueAnom)/e 0;
     ]
 
-    dx[1:6] = f0 + F*a_SRP_O; 
+    dx[1:6] .= f0 + F*a_SRP_O; 
 
 end
 

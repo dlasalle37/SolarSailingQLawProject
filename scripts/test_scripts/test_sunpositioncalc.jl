@@ -2,6 +2,12 @@ using DrWatson
 @quickactivate "SolarSailingQLawProject"
 
 include(srcdir("Includes.jl"))
+
+## SPICE SETUP
+furnsh("naif0012.tls")
+furnsh("de440.bsp")
+## END SPICE SETUP
+
 epoch = "2018-06-06T20:45:00"
 eti = utc2et(epoch)
 simTime =3*360*24*3600
