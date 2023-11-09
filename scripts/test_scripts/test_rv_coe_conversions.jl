@@ -1,30 +1,15 @@
 using DrWatson
 using SPICE
 @quickactivate "SolarSailingQLawProject"
-include(srcdir("utils.jl"))
+include(srcdir("Includes.jl"))
 
-## SPICE SETUP
-furnsh("naif0012.tls")
-furnsh("de440.bsp")
-## END SPICE SETUP
+mu = 398600.4418
+r1 = [42164.0, 36.4, 0.971] # km
+v1 = [0.21, 3.031, 0.19] # km/sail
 
-date = "2023-06-01T012:00:00" 
-et = utc2et(date)  # start date
+coe = rv2coe(r1, v1, mu)
 
-tspan = 0:600:360.0*24*3600
+r2, v2 = coe2rv(coe[1], coe[2], coe[3], coe[4], coe[5], coe[6], mu)
 
-k=1
-r = zeros(length(collect(tspan)), 3)
-for t in tspan
-    (X, o) = spkez(399, et+t, "ECLIPJ2000", "none", 10);
-    rES_vec = X[1:3]; vES_vec = X[4:6]  # position and velocity of Earth wrt Sun in J2000 Ecliptic frame
-    #earth_coe = rv2coe(rES_vec, vES_vec, 1.327E11)  # earth's keplerian orbital elements in its heliocentric orbit
-    #(r[i,:], ~) = coe2rv
-    r[k, :] = rES_vec
-    global k+=1
-end
-
-
-
-plot(r[:,1], r[:,2], r[:,3])
-xlabel!("Inertial X(km)"); ylabel!("Inertial Y (km)"); zlabel!("Inertial Z(km)")
+println("initial r: $r1 \ninitial v: $v1")
+println("check r: $r2 \ncheck v: $v2")

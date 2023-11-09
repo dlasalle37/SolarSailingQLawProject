@@ -14,3 +14,8 @@ endEpoch = utc2et(endDate)  # end date
 a = twoBodyEarthEphemeride(epoch, endEpoch)
 
 ν = get_heliocentric_position(a, endEpoch)
+print(ν)
+
+#unload kernels
+unload("naif0012.tls")
+unload("de440.bsp")

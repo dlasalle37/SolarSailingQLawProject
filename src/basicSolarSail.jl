@@ -77,7 +77,9 @@ function solarSailEOM_cartesian!(dx, x, p, t)
 
     # EOM
     dx[1:3] .= vVec
-    dx[4:6] .= -mu/r^3 * rVec + a_SRP
+    dx[4] = -mu/r^3 * rVec[1] + a_SRP[1]
+    dx[5] = -mu/r^3 * rVec[2] + a_SRP[2]
+    dx[6] = -mu/r^3 * rVec[3] + a_SRP[3]
 end
 
 function aSRP_orbitFrame(spacecraftState, α::Float64, β::Float64, sc::basicSolarSail, time::Float64, eph::TwoBodyEphemeride; method=:Oguri)
@@ -89,6 +91,8 @@ function aSRP_orbitFrame(spacecraftState, α::Float64, β::Float64, sc::basicSol
         sc: solar sail struct 
         time: time past j2000 to calculate SRP
         mu: grav parameter of central body [km^3/s^2]
+        method: :Oguri (default) for a state vector of [a e inc argPer lambda, trueAnom]
+                :Kep for state vector of [a e inc argPer RAAN, trueAnom]
     OUTPUTS:
         aSRP_oFrame: acceleration vector in the orbit frame [km/s^2]
         earth_coe: keplerian orbital elements of earth at current time (saving space)
@@ -107,7 +111,7 @@ function aSRP_orbitFrame(spacecraftState, α::Float64, β::Float64, sc::basicSol
     a1 = C1*(cos(α))^2+C2*cos(α)+C3  # sun frame r-direction, not scaled
     a2 = -(C1*cos(α)+C2)*sin(α)sin(β)  # sun frame theta-direction, not scaled
     a3 = -(C1*cos(α)+C2)*sin(α)cos(β)  # sun frame h-direction, not scaled
-    a_S = cos(α)*sc.areaParam * G0/d^2 * [a1; a2; a3]  # aSRP expressed in sun frame
+    a_S = cos(α)*sc.areaParam * G0/d^2 * @SVector [a1; a2; a3]  # aSRP expressed in sun frame
 
     # Now, create rotation matrix from sun frame to orbit frame
     # R_S_0 = R3(trueAnom + argPer)*R1(inc)*R3(lambda)
@@ -117,9 +121,9 @@ function aSRP_orbitFrame(spacecraftState, α::Float64, β::Float64, sc::basicSol
         lambda = spacecraftState[5]-trueAnom_earth
     end
     ang = trueAnom + argPer;
-    R3a = [cos(ang) sin(ang) 0; -sin(ang) cos(ang) 0; 0 0 1]
-    R1 = [1 0 0; 0 cos(inc) sin(inc); 0 -sin(inc) cos(inc)]
-    R3b = [cos(lambda) sin(lambda) 0; -sin(lambda) cos(lambda) 0; 0 0 1]
+    R3a = @SMatrix [cos(ang) sin(ang) 0; -sin(ang) cos(ang) 0; 0 0 1]
+    R1 = @SMatrix [1 0 0; 0 cos(inc) sin(inc); 0 -sin(inc) cos(inc)]
+    R3b = @SMatrix [cos(lambda) sin(lambda) 0; -sin(lambda) cos(lambda) 0; 0 0 1]
     R_S_O = R3a*R1*R3b
     aSRP_oFrame = R_S_O * a_S
     return aSRP_oFrame
@@ -187,8 +191,9 @@ function gauss_variational_eqn!(dx, x, params, t)
         p*cos(trueAnom)/e -(p+r)*sin(trueAnom)/e 0;
     ]
 
-    dx[1:6] .= f0 + F*a_SRP_O; 
+    dx[1:6] .= f0 + F*(a_SRP_O); 
 
+    #dx[1:6] .= f0 + F*[0; 1E-7; 0] # uncomment to test EOM
 end
 
 function gauss_variational_eqn_keplerian!(dx, x, params, t)
