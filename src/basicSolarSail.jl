@@ -162,7 +162,7 @@ function gauss_variational_eqn!(dx, x, params, t)
     if inc <= 1.0E-4
         inc = 1.0E-4
     end
-    state = (a, e, inc, argPer, lambda, trueAnom)
+    state = @SVector [a, e, inc, argPer, lambda, trueAnom]
     # get the acceleration:
     a_SRP_O = aSRP_orbitFrame(state, α, β, sc, epoch+t, eph);  # SRP acceleration resolved into the O (orbit) frame where O{s/c, er_hat, eθ_hat, eh_hat}
 

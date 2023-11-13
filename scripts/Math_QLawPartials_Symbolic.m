@@ -28,8 +28,8 @@ syms Qa Qe Qinc Qape Qlam real        % terms of Lyapunov function summation
 syms m_petro n_petro real
 syms r_petro b_petro k_petro real
 syms C1 C2 C3 Asail msail real % sail parameters
-syms r_sc_sun G0  % SRP parameters (assuming r_sc_sun is approximately constant)
-
+syms r_sc_sun G0 real% SRP parameters (assuming r_sc_sun is approximately constant)
+syms nustar_a nustar_e nustar_inc nustar_ape nustar_lam real
 % ^ terms to calculate oe_dot_xx
 
 syms dQdcoe real% 5x5 array holding derivatives of each term of
@@ -85,12 +85,11 @@ se = svec_P(1); sp = svec_P(2); sh = svec_P(3); %breaking it down
 
 % ballistic evolution of state
 nudot = (1+e*cos(tru))^2 / (1-e^2)^(3/2) * sqrt(mu/a^3);
-nudot_body = (1+e_E*cos(tru_E))^2 / (1-e_E^2)^(3/2) * sqrt(mu_sun/a^3);
+nudot_body = (1+e_E*cos(tru_E))^2 / (1-e_E^2)^(3/2) * sqrt(mu_sun/a_E^3);
 f0 = [0 0 0 0 -nudot_body nudot]'; %f0(xslow)
 
 % Calculating oedot_nn for each oe
 % Semi-major axis:
-nustar_a = atan2(sig_a*se, -sig_a*sp);
 R_H_O_star_a = rot_hill_to_orbit(inc, ape, lam, nustar_a);
 F_a = F(a, e, inc, ape, lam, nustar_a, mu);
 p_a = -[sig_a*eps_a'*F_a*R_H_O_star_a]';
@@ -111,14 +110,11 @@ adotnn = sig_a*eps_a'*f0-p_a'*astar_SRP_a;
 Qa = (dista^2 / (-abs(dista)*adotnn))^2;
 
 % Eccentricity: use both, see which gives greater 
-nustar_e1 = 0.5*atan2(sig_e*se, -sig_e*sp);
-nustar_e2 = nustar_e1 + pi;
 
 % Inclination
-nustar_inc = pi/2 - ape + sign(sig_inc*sh)*(asin(e*sin(ape))+pi/2);
 
 % Lam
-nustar_lam = pi - ape + sign(sig_lam*sh/sin(inc)) * acos(e*cos(ape));
+
 
 % Argument of periapsis:
 % So far I have found two ways of doing this as there is not yet an

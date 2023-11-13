@@ -165,7 +165,7 @@ function get_heliocentric_position(eph::TwoBodyEphemeride, tf; tol=1.0E-6)
     OUTPUTS:
         trueAnom: current position of eph.targID in its heliocentric orbit
     =#
-    mu = MU_SUN
+    mu = SUN_MU
     t0 = eph.t0;
     t = tf-t0
     νi = eph.trueAnom_initial

@@ -6,13 +6,16 @@ using DifferentialEquations
 using Plots
 using SPICE
 using StaticArrays
+using FiniteDiff
+using Statistics
 
 #Includes
 include("constants.jl")
 include("Ephemerides.jl")
 include("basicSolarSail.jl")
 include("utils.jl")
-
+include("QLawParams.jl")
+include("QLaw.jl")
 
 
 # Setups
