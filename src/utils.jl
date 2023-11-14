@@ -213,3 +213,22 @@ function distance_to_sun(eph::TwoBodyEphemeride, nu::Float64)
     dist = a*(1-e^2)/(1+e*cos(nu))  # trajectory equation
     return dist
 end
+
+"""
+hill_to_orbit_transform: A function to construct the rotation matrix from the hill frame to the orbit frame
+Notes: 
+    - This is a general rotation matrix defined in 'Solar Sailing Q-Law for Planetocentric, Many-Revolution Sail Orbit Transfers' by Oguri & McMahon
+Inputs:
+    inc: inclination [rad]
+    ape: argument of periapsis [rad]
+    lam: longitude of ascending node from Hill frame i_r vector [rad]
+    tru: true anomaly [rad]
+"""
+function hill_to_orbit_transform(inc, ape, lam, tru)
+    R = @SArray [  # Rotation from hill to orbit frame
+            cos(ape + tru)*cos(lam) - sin(ape + tru)*cos(inc)*sin(lam) cos(ape + tru)*sin(lam) + sin(ape + tru)*cos(inc)*cos(lam) sin(ape + tru)*sin(inc);
+             -sin(ape + tru)*cos(lam) - cos(ape + tru)*cos(inc)*sin(lam) cos(ape + tru)*cos(inc)*cos(lam)-sin(ape + tru)*sin(lam) cos(ape + tru)*sin(inc);
+             sin(inc)*sin(lam) -cos(lam)*sin(inc) cos(inc)
+            ]
+    return R
+end

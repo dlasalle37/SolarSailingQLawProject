@@ -124,7 +124,7 @@ function aSRP_orbitFrame(spacecraftState, α::Float64, β::Float64, sc::basicSol
     R3a = @SMatrix [cos(ang) sin(ang) 0; -sin(ang) cos(ang) 0; 0 0 1]
     R1 = @SMatrix [1 0 0; 0 cos(inc) sin(inc); 0 -sin(inc) cos(inc)]
     R3b = @SMatrix [cos(lambda) sin(lambda) 0; -sin(lambda) cos(lambda) 0; 0 0 1]
-    R_S_O = R3a*R1*R3b
+    R_S_O = hill_to_orbit_transform(inc, argPer, lambda, trueAnom)
     aSRP_oFrame = R_S_O * a_S
     return aSRP_oFrame
 end

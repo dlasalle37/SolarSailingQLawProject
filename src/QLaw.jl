@@ -131,13 +131,28 @@ function calculate_Q(x)
         adotnn = sig_a*eps_a'*f0 - p_a'*astar_hill
         
         # Ecccentricity
-            # For eccentricity, two edotnn's are computed and compared
+            # For eccentricity, two edotnn's are computed and compared, smaller is taken and used in Q
             # This will be done in the below for loop
-        
+        edotnn_set = [0.0, 0.0]
         for n = [0, 1]
-            
+            nustar_e = 0.5*atan(sig_e*se, -sig_e*sp) + n*pi
+            R_H_O_star_e = hill_to_orbit_transform(inc, ape, lam, nustar_e)
+            F_e = F(a, e, inc, ape, nustar_e, mu)
+            p_e = transpose(-sig_e*eps_e'*F_e*R_H_O_star_e);
+            p_ey = p_e[2]
+            p_ez = p_e[3]
+            betastar_e = atan(-p_ey, -p_ez)
+            alphastar_e = calculate_alpha_star(p_e, sc)
+            alphastar_e = median([params.alpha_min, alphastar_e, params.alpha_max])
+            ustar_e = @SVector [alphastar_e; betastar_e]  # EOC
+            astar_hill = aSRP(ustar_e, sc, eph, tru_E)
+            edotnn_set[n+1] = sig_e*eps_e'*f0 - p_e'*astar_hill
         end
-        return adotnn
+        edotnn = min(edotnn_set[1], edotnn_set[2])
+
+        # Inclination
+        nustar_inc = pi/2 - ape + sign(sig_inc*sh)*(asin(e*sin(ape))+pi/2)
+        return edotnn
 end
 
 
@@ -227,3 +242,4 @@ function aSRP(u, sc::basicSolarSail, eph::TwoBodyEphemeride, trueAnom_Earth)
     a_SRP = cos(α)*sc.areaParam * G0/d^2 * @SVector [a1; a2; a3]  # aSRP expressed in sun frame
     return a_SRP
 end
+
