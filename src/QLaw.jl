@@ -1,4 +1,17 @@
 """
+compute_control: function to compute alphastar and betastar at a given instant in time
+inputs: 
+    -x: state vector [a, e, inc, ape, lam, tru] w/ units [km, none, rad, rad, rad, rad]
+    -dQdx: gradient of Q wrt state vector
+outputs: 
+    -alphastar: control variable alpha at given time instant
+    -betastar: control variable beta at given time instant
+"""
+function compute_control(x::MArray, dQdx::MArray, params::QLawParams)
+
+end
+
+"""
 Computing Q and dQdx from the state variables and parameters
 dQdx is computed numerically with finite difference
 
@@ -6,19 +19,19 @@ Notes:
 When calling this function in a script, create a global QLawParams struct first, since I have not yet found a way to include parameters
     into this function (as an argument), since it is used to calculate nuerical derivatives with FiniteDiff
 """
-function calculate_Q_derivative(x)
+function calculate_Q_derivative(x::MArray)
 
     Q = calculate_Q(x)
 
     # Calculate derivatives
-
-    return Q
+    dqdx = FiniteDiff.finite_difference_gradient(calculate_Q, x)
+    return Q, dqdx
 end
 
 """
 The below function is where the actual calculation of Q is done
 """
-function calculate_Q(x)
+function calculate_Q(x::MArray)
 
         # Unpack inputs
         a = x[1]
@@ -114,21 +127,18 @@ function calculate_Q(x)
         # BEST CASE TIME TO GO's
         # Semi-major axis:
         nustar_a = atan(sig_a*se, -sig_a*sp)
-        R_H_O_star_a = @SArray [  # Rotation from hill to orbit frame evaluated at nustar
-        cos(ape + nustar_a)*cos(lam) - sin(ape + nustar_a)*cos(inc)*sin(lam) cos(ape + nustar_a)*sin(lam) + sin(ape + nustar_a)*cos(inc)*cos(lam) sin(ape + nustar_a)*sin(inc);
-         -sin(ape + nustar_a)*cos(lam) - cos(ape + nustar_a)*cos(inc)*sin(lam) cos(ape + nustar_a)*cos(inc)*cos(lam)-sin(ape + nustar_a)*sin(lam) cos(ape + nustar_a)*sin(inc);
-         sin(inc)*sin(lam) -cos(lam)*sin(inc) cos(inc)
-        ]
+        R_H_O_star_a = hill_to_orbit_transform(inc, ape, lam, nustar_a)
         F_a = F(a, e, inc, ape, nustar_a, mu)
         p_a = transpose(-sig_a*eps_a'*F_a*R_H_O_star_a);
         p_ay = p_a[2] 
         p_az = p_a[3]
         betastar_a = atan(-p_ay, -p_az)
         alphastar_a = calculate_alpha_star(p_a, sc)
-        alphastar_a = median([params.alpha_min, alphastar_a, params.alpha_max])
+        alphastar_a = median([params.alpha_min, alphastar_a, params.alpha_max]) # enforcing alphastar range constraint
         ustar_a = @SVector [alphastar_a; betastar_a]  # elementwise optimal control (EOC)
         astar_hill = aSRP(ustar_a, sc, eph, tru_E) # SRP accel. evaluated at EOC
-        adotnn = sig_a*eps_a'*f0 - p_a'*astar_hill
+        adotnn = sig_a*eps_a'*f0 - p_a'*astar_hill # positive denominator of best-case ttg for A
+        tau_a = abs(dista)/-adotnn  # best-case ttg term
         
         # Ecccentricity
             # For eccentricity, two edotnn's are computed and compared, smaller is taken and used in Q
@@ -149,10 +159,67 @@ function calculate_Q(x)
             edotnn_set[n+1] = sig_e*eps_e'*f0 - p_e'*astar_hill
         end
         edotnn = min(edotnn_set[1], edotnn_set[2])
+        tau_e = abs(diste)/-edotnn
 
         # Inclination
         nustar_inc = pi/2 - ape + sign(sig_inc*sh)*(asin(e*sin(ape))+pi/2)
-        return edotnn
+        R_H_O_star_inc = hill_to_orbit_transform(inc, ape, lam, nustar_inc)
+        F_inc = F(a, e, inc, ape, nustar_inc, mu)
+        p_inc = transpose(-sig_inc*eps_inc'*F_inc*R_H_O_star_inc);
+        p_incy = p_inc[2]
+        p_incz = p_inc[3]
+        betastar_inc = atan(-p_incy, -p_incz)
+        alphastar_inc = calculate_alpha_star(p_inc, sc)
+        alphastar_inc = median([params.alpha_min, alphastar_inc, params.alpha_max])
+        ustar_inc = @SVector [alphastar_inc; betastar_inc]
+        astar_hill = aSRP(ustar_inc, sc, eph, tru_E)
+        incdotnn = sig_inc*eps_inc'*f0 - p_inc'*astar_hill
+        tau_inc = abs(distinc)/-incdotnn
+
+        # Argument of periapsis
+        # This one is done with a brute force method:
+        nu = range(0, 2*pi, 200)  # 200 evenly spaced points from 0 to 2*pi
+        mappedvals = @MArray zeros(length(nu)) # initialize solution
+        for i in range(1, length(nu))
+            mappedvals[i] = sig_ape*p/(h*(1+e*cos(nu[i]))) * (1/e * sin(nu[i])*(-se*sin(nu[i])+sp*cos(nu[i])) - sin(nu[i]+ape)/tan(inc) * sh)
+        end
+        nustar_ape = nu[argmin(mappedvals)] # the nu that minimized mappedvals is the approx. nustar for ape
+
+        # From here, it is the same as the others
+        R_H_O_star_ape = hill_to_orbit_transform(inc, ape, lam, nustar_ape)
+        F_ape = F(a, e, inc, ape, nustar_ape, mu)
+        p_ape = transpose(-sig_ape*eps_ape'*F_ape*R_H_O_star_ape);
+        p_apey = p_ape[2]
+        p_apez = p_ape[3]
+        betastar_ape = atan(-p_apey, -p_apez)
+        alphastar_ape = calculate_alpha_star(p_ape, sc)
+        alphastar_ape = median([params.alpha_min, alphastar_ape, params.alpha_max])
+        ustar_ape = @SVector [alphastar_ape; betastar_ape]
+        astar_hill = aSRP(ustar_ape, sc, eph, tru_E)
+        apedotnn = sig_ape*eps_ape'*f0 - p_ape'*astar_hill
+        tau_ape = abs(distape)/-apedotnn
+
+        # Longitude of ascending node from ir (lambda)
+        nustar_lam = pi - ape + sign(sig_lam*sh/sin(inc))*acos(e*cos(ape))
+        R_H_O_star_lam = hill_to_orbit_transform(inc, ape, lam, nustar_lam)
+        F_lam = F(a, e, inc, ape, nustar_lam, mu)
+        p_lam = transpose(-sig_lam*eps_lam'*F_lam*R_H_O_star_lam);
+        p_lamy = p_lam[2]
+        p_lamz = p_lam[3]
+        betastar_lam = atan(-p_lamy, -p_lamz)
+        alphastar_lam = calculate_alpha_star(p_lam, sc)
+        alphastar_lam = median([params.alpha_min, alphastar_lam, params.alpha_max])
+        ustar_lam = @SVector [alphastar_lam; betastar_lam]
+        astar_hill = aSRP(ustar_lam, sc, eph, tru_E)
+        lamdotnn = sig_lam*eps_lam'*f0 - p_lam'*astar_hill
+        tau_lam = abs(distlam)/-lamdotnn
+
+        ###################################################################################################################################################
+        # PUTTING Q TOGETHER :)
+        Q = (1+Wp*P)*(Wa*Sa*tau_a^2 + We*tau_e^2 + Winc*tau_inc^2 + Wape*tau_ape^2 + Wlam*tau_lam^2)
+        ###################################################################################################################################################
+
+        return Q
 end
 
 

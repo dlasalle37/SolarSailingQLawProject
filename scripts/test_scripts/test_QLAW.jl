@@ -17,12 +17,12 @@ eph = twoBodyEarthEphemeride(epoch, endEpoch)
 ν = get_heliocentric_position(eph, epoch)
 
 # Parameter Setup
-X0 = @SVector [42164.0, 0.65, 2*pi/180, 0.0, 90*pi/180, 0.0] # Initial
-XT = @SVector [42764.0, 0.7, 20*pi/180, 270.0*pi/180, 90*pi/180] # Targets
+X0 = @MArray [42164.0, 0.65, 2*pi/180, 0.0, 0.0, 0.0] # Initial
+XT = @SVector [42764.0, 0.7, 20*pi/180, 270.0*pi/180, 90*pi/180] # Targets # note that targets has 5 elements, while X0 has 6
 
 # initialize parameters
 global params = QLawParams(sc, eph, eph.t0, XT[1], XT[2], XT[3], XT[4], XT[5])
-x  = calculate_Q_derivative(X0)
+x, dx = calculate_Q_derivative(X0)
 
 unload("naif0012.tls")
 unload("de440.bsp")

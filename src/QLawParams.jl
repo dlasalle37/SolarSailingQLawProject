@@ -4,7 +4,7 @@ mutable struct QLawParams
     eph::TwoBodyEphemeride
     mu::Float64
     mu_sun::Float64
-    current_time::Float64 # time (seconds past j2000)
+    current_time::Float64 # time (seconds past j2000) (this should be continually updated through zero-order hold)
     # Targets 
     a_t::Float64
     e_t::Float64

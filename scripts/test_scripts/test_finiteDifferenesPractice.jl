@@ -2,7 +2,7 @@ using DrWatson
 @quickactivate "SolarSailingQLawProject"
 include(srcdir("Includes.jl"))
 
-x = [2.6; 1.4; 9.8; 7.1; 0.1; 1.2] # state vector
+x = @MArray [2.6; 1.4; 9.8; 7.1; 0.1; 1.2] # state vector
 global params = [2]
 function Qf(x)
 
