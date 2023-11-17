@@ -8,6 +8,7 @@ using SPICE
 using StaticArrays
 using FiniteDiff
 using Statistics
+using LinearAlgebra
 
 #Includes
 include("constants.jl")

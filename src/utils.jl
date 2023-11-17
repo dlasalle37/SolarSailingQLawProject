@@ -1,4 +1,4 @@
-using LinearAlgebra
+
 # Some utility functions, not specifically associated with anything
 function shadow_function()
     #= Formulation can be found sure at https://ai-solutions.com/_help_Files/spacecraft_percentshadow_0_nanosecond.htm\
@@ -18,22 +18,22 @@ function shadow_function()
 end
 
 
-
-function rv2coe(r::Vector, v::Vector, mu::Float64) 
-    #=
-    Calculate the 6 classical orbital elements from r, v, mu (under the two body problem)
-    INPUTS:
-        r: inertial position vector (km)
-        v: inertial velocity vector (km/s)
-        mu: gravitational parameter of central body (km^3/s^2)
-    OUPUTS:
+"""
+Calculate the 6 classical keplerian orbital elements from r, v, mu (under the two body problem)
+INPUTS:
+    r: inertial position vector (km)
+    v: inertial velocity vector (km/s)
+    mu: gravitational parameter of central body (km^3/s^2)
+OUPUTS:
+    coe: tuple of 6 Keplerian elements, which are:
         a: semi major axis (km)
         e: eccentricity
         inc: inclination (radians)
         RAAN: right-ascension (radians)
         argPer: argument of perigee (radians)
         trueAnom: true anomaly (radians)
-    =#
+"""
+function rv2coe(r::Vector, v::Vector, mu::Float64) 
     r_norm = norm(r); #scalar position
     v_norm = norm(v); #scalar velocity
 
@@ -89,21 +89,21 @@ function rv2coe(r::Vector, v::Vector, mu::Float64)
     
 end
 
+"""
+coe2rv: Calculate the inertial position and velocity vectors from Keplerian classical orbital elements
+INPUTS:
+    a: semi major axis (km)
+    e: eccentricity
+    inc: inclination (radians)
+    RAAN: right-ascension (radians)
+    argPer: argument of perigee (radians)
+    trueAnom: true anomaly (radians)
+    mu: gravitational parameter of central body (km^3/s^2)
+Outputs:
+    r: inertial position vector (km)
+    v: inertial velocity vector (km/s)
+"""
 function coe2rv(a::Float64, e::Float64, i::Float64, w::Float64, RAAN::Float64, nu::Float64, mu::Float64)
-    #=
-    Calculate the inertial position and velocity vectors from Keplerian classical orbital elements
-    INPUTS:
-        a: semi major axis (km)
-        e: eccentricity
-        inc: inclination (radians)
-        RAAN: right-ascension (radians)
-        argPer: argument of perigee (radians)
-        trueAnom: true anomaly (radians)
-        mu: gravitational parameter of central body (km^3/s^2)
-    Outputs:
-        r: inertial position vector (km)
-        v: inertial velocity vector (km/s)
-    =#
     p = a*(1-e^2); #semi-latus rectum
     r = p / (1+e*cos(nu)); #scalar r from trajectory
 
@@ -135,40 +135,41 @@ function coe2rv(a::Float64, e::Float64, i::Float64, w::Float64, RAAN::Float64, n
     return r, v
 end
 
-function get_sunlight_direction(et)
-    #= 
-    Calls the SPICE toolkit to calculate the position of the earth WRT the sun expressed in the J2000 Frame.
-    Since this vector points to the Earth, this will give the sunlight direction and the radial distance to the earth
-    
-    Inputs: 
-        et: seconds past J2000 date
-    Outputs:
-        sHat: sunlight direction unit vector in j2k frame
-        rSE: radial distance of the sun to the earth (this is approximately equal to sun-spacecraft distance for near-earth satellites)
-    =#
+"""
+Calls the SPICE toolkit to calculate the position of the earth WRT the sun expressed in the J2000 Frame.
+Since this vector points to the Earth, this will give the sunlight direction and the radial distance to the earth
 
+Inputs: 
+    et: seconds past J2000 date
+Outputs:
+    sHat: sunlight direction unit vector in j2k frame
+    rES: radial distance of the sun to the earth (this is approximately equal to sun-spacecraft distance for near-earth satellites)
+"""
+function get_sunlight_direction(et)
     (X0, ~) = spkez(399, et, "J2000", "none", 10)
     rES_j2k = X0[1:3]
     rES = norm(rES_j2k)
-    sr = rES_j2k/rES
+    sr = rES_j2k/rES # sunlight direction vector expressed in j2000 frame
 
     return sr, rES
 
 end
 
-function get_heliocentric_position(eph::TwoBodyEphemeride, tf; tol=1.0E-6)
-    #=
-    INPUTS: 
-    eph: ephemeride struct containing the initial time and position info of earth in helio orbit
-    tf: current time, seconds past j2000
+"""
+get_heliocentric_position: Solve kepler's equation for ellipses to calculate the position of a planet on its
+heliocentric orbit (true anomaly)
+INPUTS: 
+eph: ephemeride struct containing the initial time and position info of earth in helio orbit
+tf: current time in ephemeris time
 
-    OUTPUTS:
-        trueAnom: current position of eph.targID in its heliocentric orbit
-    =#
+OUTPUTS:
+    trueAnom: current position of eph.targID in its heliocentric orbit [rad]
+"""
+function get_heliocentric_position(eph::TwoBodyEphemeride, tf; tol=1.0E-6)
     mu = SUN_MU
     t0 = eph.t0;
-    t = tf-t0
-    νi = eph.trueAnom_initial
+    t = tf-t0 # difference between current and initial ephemeris times [seconds]
+    νi = eph.trueAnom_initial 
     a = eph.semiMajorAxis
     e = eph.eccentricity
 
@@ -198,15 +199,19 @@ function get_heliocentric_position(eph::TwoBodyEphemeride, tf; tol=1.0E-6)
     return νf
 end
 
+"""
+Calculates the planet-sun distance based on earth's current true anomaly.
+Just applies the trajectory equation, based on nominal values of semi-major(a) and eccentricity(e).
+
+Later, it may be possible to implement oscillating values for a and e, just need to turn the TwoBodyEphemeride struct to mutable, and continually update
+a and e values.
+INPUTS:
+    eph: TwoBodyEphemeride with target as planet and observer as sun
+    nu: true anomaly to calculate distance at [radians]
+OUTPUTS:
+    dist: distance to sun [km]
+"""
 function distance_to_sun(eph::TwoBodyEphemeride, nu::Float64)
-    #=
-    Calculates the planet-sun distance based on earth's current true anomaly
-    INPUTS:
-        eph: TwoBodyEphemeride with target as planet and observer as sun
-        nu: true anomaly to calculate distance at [radians]
-    OUTPUTS:
-        dist: distance to sun [km]
-    =#
     a = eph.semiMajorAxis
     e = eph.eccentricity
 
