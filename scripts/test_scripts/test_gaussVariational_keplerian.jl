@@ -14,7 +14,7 @@ simTime = 150.0*24*3600 # amount of time [s] to simulate for
 endTime = startTime+simTime
 
 eph = twoBodyEarthEphemeride(startTime, endTime)  # create the earth ephemeride
-sc = basicSolarSail()
+sc = basicSolarSail(method=:Kep)
 mu = 398600.4418;
 u = [30*pi/180, 0.0*pi/180]  # alpha and beta control parameters
 p = (mu, sc, u, eph) # parameter set for ODE solver
@@ -24,7 +24,7 @@ tspan = (0, simTime)
 # Tolerances
 reltol=1.0E-6
 abstol=1.0E-6
-prob = ODEProblem(gauss_variational_eqn_keplerian!, X0, tspan, p, abstol=abstol, reltol=reltol, saveat=600)
+prob = ODEProblem(gauss_variational_eqn!, X0, tspan, p, abstol=abstol, reltol=reltol, saveat=600)
 sol = solve(prob);
 
 # Convert all to r, v:

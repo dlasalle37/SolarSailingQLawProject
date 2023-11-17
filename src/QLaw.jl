@@ -7,31 +7,30 @@ outputs:
     -alphastar: control variable alpha at given time instant
     -betastar: control variable beta at given time instant
 """
-function compute_control(x::MArray, dQdx::MArray, params::QLawParams)
+function compute_control(x, params::QLawParams)
+    # Unpacking:
+    mu = params.mu
+    a = x[1]
+    e = x[2]
+    inc = x[3]
+    ape = x[4]
+    lam = x[5]
+    tru = x[6]
 
-end
-
-"""
-Computing Q and dQdx from the state variables and parameters
-dQdx is computed numerically with finite difference
-
-Notes:
-When calling this function in a script, create a global QLawParams struct first, since I have not yet found a way to include parameters
-    into this function (as an argument), since it is used to calculate nuerical derivatives with FiniteDiff
-"""
-function calculate_Q_derivative(x::MArray)
-
-    Q = calculate_Q(x)
-
-    # Calculate derivatives
-    dqdx = FiniteDiff.finite_difference_gradient(calculate_Q, x)
-    return Q, dqdx
+    # Calculation
+    dQdx = FiniteDiff.finite_difference_gradient(x->calculate_Q(x, params), x)
+    Fx = F(a, e, inc, ape, tru, mu)
+    R_H_O = hill_to_orbit_transform(inc, ape, lam, tru)  # rotation matrix for current states
+    pvec = transpose(transpose(dQdx)*Fx*R_H_O)
+    alphastar = calculate_alpha_star(pvec, sc)
+    betastar = atan(-pvec[2], -pvec[3])
+    return alphastar, betastar
 end
 
 """
 The below function is where the actual calculation of Q is done
 """
-function calculate_Q(x::MArray)
+function calculate_Q(x, params)
 
         # Unpack inputs
         a = x[1]
@@ -55,18 +54,20 @@ function calculate_Q(x::MArray)
         npet = params.n_petro
 
         # Targets
-        a_t = params.a_t
-        e_t = params.e_t
-        inc_t = params.inc_t
-        ape_t = params.ape_t
-        lam_t = params.lam_t
+        oet = params.oet
+        a_t = oet[1]
+        e_t = oet[2]
+        inc_t = oet[3]
+        ape_t = oet[4]
+        lam_t = oet[5]
 
         # Weights
-        Wa = params.Wa
-        We = params.We
-        Winc = params.Winc
-        Wape = params.Wape
-        Wlam = params.Wlam
+        Woe = params.Woe
+        Wa = Woe[1]
+        We = Woe[1]
+        Winc = Woe[1]
+        Wape = Woe[1]
+        Wlam = Woe[1]
 
         # Ephemeride
         eph = params.eph
@@ -279,34 +280,3 @@ function calculate_alpha_star(p, sc::basicSolarSail)
 
     return alphastar
 end
-
-"""
-aSRP: A functiomn to be called within the Q calculation, made for calculating the SRP acceleration with elementwise optimal controls (and true anomaly)
-Notes:
-    - SRP acceleration vector is calculated in the sun-centered hill frame
-inputs:
-    u: control variables [alphastar, betastar]
-    sc: basicSolarSail
-    eph: ephemeride object for simulation
-    trueAnom_Earth: earth current true anomaly
-
-outputs:
-    aSRP: SRP acceleration vector in Hill (sun-centered) frame
-"""
-function aSRP(u, sc::basicSolarSail, eph::TwoBodyEphemeride, trueAnom_Earth)
-    # Unpack Inputs:
-    α = u[1]
-    β = u[2]
-    C1 = sc.C[1]
-    C2 = sc.C[2]
-    C3 = sc.C[3]
-    d = distance_to_sun(eph, trueAnom_Earth)
-    C1 = sc.C[1]; C2 = sc.C[2]; C3 = sc.C[3]
-    G0 = 1.02E14 # solar flux constant at earth
-    a1 = C1*(cos(α))^2+C2*cos(α)+C3  # sun frame r-direction, not scaled
-    a2 = -(C1*cos(α)+C2)*sin(α)sin(β)  # sun frame theta-direction, not scaled
-    a3 = -(C1*cos(α)+C2)*sin(α)cos(β)  # sun frame h-direction, not scaled
-    a_SRP = cos(α)*sc.areaParam * G0/d^2 * @SVector [a1; a2; a3]  # aSRP expressed in sun frame
-    return a_SRP
-end
-
