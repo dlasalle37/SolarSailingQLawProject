@@ -1,3 +1,23 @@
+"""
+QLawIntegrator: zero-order hold method integrator for QLaw.
+
+Description: Algorithm is essentially as follows:
+    1.) Take inputs
+    2.) Calculate control angle (alpha/beta)
+    3.) integrate for short time
+    4.) check stopping criteria
+    5.) if not done, go to 2.) and repeat, if done, go to 6.)
+    6.) Save output data (States, angles)
+
+    Inputs:
+    ps: structure containing everything needed for the propagation (See QLawParams for detailed info)
+
+    Outputs:
+    X0: Final states
+    exitcode: Symbol to tell the user what caused the exit (success, timed out, etc.)
+
+    data written to files (if ps.writeData=true)
+"""
 function QLawIntegrator(ps::QLawParams)
     #Pull initial states
     X0 = ps.oe0
