@@ -6,7 +6,7 @@ mutable struct QLawParams
     mu_sun::Float64
 
     # Living Parameters
-    current_time::Float64 # time (seconds past j2000) (this should be continually updated through zero-order hold)
+    current_time::Float64 # time (ephemeris time)
     alpha::Float64 # control angle alpha [rad]
     beta::Float64 # control angle beta [rad]
 
@@ -17,7 +17,7 @@ mutable struct QLawParams
     oet::Vector{Float64}
 
     # oe tolerances
-    oetol::Vector{Float64}
+    oeTols::Vector{Float64}
 
     # Weights
     Woe::Vector{Float64}
@@ -41,6 +41,15 @@ mutable struct QLawParams
     alpha_max::Float64
     beta_min::Float64
     beta_max::Float64
+
+    # Integration Parameters
+    step_size::Float64  # time step size 
+    max_sim_time::Float64 # max # of seconds to simulate for
+    abstol::Float64
+    reltol::Float64
+
+    # Writing data
+    writeData::Bool
 end
 
 
@@ -48,18 +57,17 @@ end
 function QLawParams(
     sc::basicSolarSail,
     eph::TwoBodyEphemeride,
-    current_time::Float64,
     oe0,
     oet,
-    oetol; ### MANDATORY INPUTS END HERE ###
+    oeTols; ### MANDATORY INPUTS END HERE ###
     mu::Float64=EARTH_MU,
     mu_sun::Float64=SUN_MU,
     Woe::Vector{Float64}=[1.0; 1.0; 1.0; 1.0; 1.0],
     Wp::Int=1,
     Aimp::Int=1,
-    kimp::Int=100,
+    kimp::Int=1000,
     Aesc::Int=1,
-    kesc::Int=100,
+    kesc::Int=10,
     rp_min::Float64=6578.0,
     a_esc::Float64=1.0E5,
     m_petro::Int=3,
@@ -70,11 +78,18 @@ function QLawParams(
     beta_min::Float64=-pi,
     beta_max::Float64=1.0*pi,
     beta=0.0,
-    alpha=0.0
+    alpha=0.0,
+    step_size=60.0, #seconds
+    max_sim_time = 100*86400.0, # seconds (days*sec/day)
+    abstol=1.0E-6,
+    reltol=1.0E-6,
+    writeData=true,
 )
+    current_time = eph.t0
 
-    qlawparam = QLawParams(sc, eph, mu, mu_sun, current_time, alpha, beta, oe0, oet, oetol, Woe, Wp, 
-        Aimp, kimp, Aesc, kesc, rp_min, a_esc, m_petro, n_petro, r_petro, alpha_min, alpha_max, beta_min, beta_max)
+    qlawparam = QLawParams(sc, eph, mu, mu_sun, current_time, alpha, beta, oe0, oet, oeTols, Woe, Wp, 
+        Aimp, kimp, Aesc, kesc, rp_min, a_esc, m_petro, n_petro, r_petro, alpha_min, alpha_max, beta_min, beta_max, step_size, max_sim_time, abstol, reltol,
+        writeData)
 
     return qlawparam
 end

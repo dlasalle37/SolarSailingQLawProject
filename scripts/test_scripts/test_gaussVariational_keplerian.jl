@@ -14,11 +14,15 @@ simTime = 150.0*24*3600 # amount of time [s] to simulate for
 endTime = startTime+simTime
 
 eph = twoBodyEarthEphemeride(startTime, endTime)  # create the earth ephemeride
-sc = basicSolarSail(method=:Kep)
+sc = basicSolarSail(C1=2.0 ,C2=0.0, C3=0.0, areaParam=2.5E-5, method = :Kep)
 mu = 398600.4418;
 u = [30*pi/180, 0.0*pi/180]  # alpha and beta control parameters
-p = (mu, sc, u, eph) # parameter set for ODE solver
 X0 = [42164.0; 0.00; 0.001*pi/180; 0.00; 0.0; 0.0]  # COE initial conditions [a, e, i, argPer, RAAN, trueAnom]
+XT = [42764.0, 0.7, 20*pi/180, 270.0*pi/180, 90*pi/180] # Targets # note that targets has 5 elements, while X0 has 6
+oetols = [10, 0.01, 0.1, 0.1, 0.1]
+p = QLawParams(sc, eph, X0, XT, oetols)
+p.alpha = u[1]
+p.beta = u[2]
 tspan = (0, simTime)
 
 # Tolerances

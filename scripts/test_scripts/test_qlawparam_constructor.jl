@@ -21,4 +21,4 @@ XT = [42764.0, 0.7, 20*pi/180, 270.0*pi/180, 90*pi/180] # Targets # note that ta
 oetols = [10, 0.01, 0.1, 0.1, 0.1]
 
 # initialize parameters
-params = QLawParams(sc, eph, eph.t0, X0, XT, oetols)
+params = QLawParams(sc, eph, X0, XT, oetols)

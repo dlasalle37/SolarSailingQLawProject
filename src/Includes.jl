@@ -9,14 +9,17 @@ using StaticArrays
 using FiniteDiff
 using Statistics
 using LinearAlgebra
+using DelimitedFiles
 
 #Includes
 include("constants.jl")
-include("Ephemerides.jl")
 include("basicSolarSail.jl")
+include("Ephemerides.jl")
 include("utils.jl")
 include("QLawParams.jl")
+include("EOMs.jl")
 include("QLaw.jl")
+include("QLawIntegrator.jl")
 
 
 # Setups

@@ -22,18 +22,8 @@ XT = [42764.0, 0.7, 20*pi/180, 270.0*pi/180, 90*pi/180] # Targets # note that ta
 oetols = [100, 0.01, 0.1, 0.1, 0.1]
 
 # initialize parameters
-params = QLawParams(sc, eph, eph.t0, X0, XT, oetols)
-(alphastar, betastar) = compute_control(X0, params)
-
-done = false
-while !done
-    # check tolerance
-        # if all tolerances are good
-        global done=true
-    #propagate 60s
-    #compute control
-    
-end
+params = QLawParams(sc, eph, X0, XT, oetols)
+alphastar, betastar, dQdx = compute_control(X0, params)
 
 unload("naif0012.tls")
 unload("de440.bsp")

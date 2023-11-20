@@ -182,6 +182,7 @@ function get_heliocentric_position(eph::TwoBodyEphemeride, tf; tol=1.0E-6)
     #Use newton's method to calculate E at t;
     done = false
     Ek = M  # initial guess
+    numLoops = 0
     while !done
         nextGuess = Ek + (M0 + M - Ek + e*sin(Ek))/(1-e*cos(Ek))
         err = abs(nextGuess-Ek)
@@ -192,7 +193,16 @@ function get_heliocentric_position(eph::TwoBodyEphemeride, tf; tol=1.0E-6)
         else
             Ek = nextGuess
             done = false
+            if numLoops >= 100
+                
+                done = true
+                println(eph)
+                println("tf: $tf")
+                error("Earth position calculation nonconvergence")
+                
+            end
         end
+        numLoops+=1
     end
     E=Ek
     νf = 2*atan(sqrt((1+e)/(1-e)) * tan(E/2))
