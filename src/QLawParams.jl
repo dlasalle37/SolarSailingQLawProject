@@ -65,7 +65,7 @@ function QLawParams(
     Woe::Vector{Float64}=[1.0; 1.0; 1.0; 1.0; 1.0],
     Wp::Int=1,
     Aimp::Int=1,
-    kimp::Int=1000,
+    kimp::Int=100,
     Aesc::Int=1,
     kesc::Int=10,
     rp_min::Float64=6578.0,

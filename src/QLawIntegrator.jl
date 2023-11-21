@@ -45,7 +45,7 @@ function QLawIntegrator(ps::QLawParams)
         # Compute control
         tf = integTime+integStep
         tspan = (integTime, tf)
-        α, β = compute_control(x, ps)
+        α, β, ~ = compute_control(x, ps)
         ps.alpha = α
         ps.beta = β
         u = @SArray [α; β]
@@ -59,6 +59,7 @@ function QLawIntegrator(ps::QLawParams)
         # Error Checking
         if sol.retcode != :Success
             println(sol.retcode)
+            println(sol.u)
             error(":(")
         end
         

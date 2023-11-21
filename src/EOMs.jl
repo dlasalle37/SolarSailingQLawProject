@@ -132,7 +132,7 @@ function gauss_variational_eqn!(dx, x, params::QLawParams, t)
     state = @SVector [a, e, inc, argPer, lambda, trueAnom]
     # get the acceleration:
     # Compute earth coe at current time
-    nue = get_heliocentric_position(eph, params.current_time)
+    nue = get_heliocentric_position(eph, params.current_time) # note, args ideally are (eph, eph.t0+t), but leave it like this for now (approx.same result)
 
     a_SRP_O = aSRP_orbitFrame(state, u, sc, nue, eph);  # SRP acceleration resolved into the O (orbit) frame where O{s/c, er_hat, eθ_hat, eh_hat}
 

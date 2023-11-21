@@ -33,7 +33,7 @@ prob = ODEProblem(gauss_variational_eqn!, X0, tspan, p, abstol=abstol, reltol=re
 sol = solve(prob);
 
 # Convert all to r, v:
-solCartesian = zeros(length(sol.u), 6)
+solCartesian = zeros(length(sol.t), 6)
 k=1
 for i in sol.u
     trueAnom_earth = get_heliocentric_position(eph, startTime+sol.t[k])

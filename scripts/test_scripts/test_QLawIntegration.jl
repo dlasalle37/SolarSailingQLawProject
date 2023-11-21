@@ -30,11 +30,13 @@ params = QLawParams(
     rp_min=6578.0,
     a_esc=1.0E5,
     max_sim_time = 20.0*86400,
-    step_size = 60,
-    writeData=false
+    step_size = 60.0,
+    writeData=true,
+    kimp=1000
     )
 
 finalOE, exitcode = QLawIntegrator(params)
 
-println("Final Values: ", finalOE[1:5])
+println("Final Values: ", finalOE[1:6])
 println("Targets: ", XT)
+println(exitcode)

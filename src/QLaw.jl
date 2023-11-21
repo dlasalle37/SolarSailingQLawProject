@@ -17,26 +17,40 @@ function compute_control(x, params::QLawParams)
     lam = x[5]
     tru = x[6]
 
+    sc=params.sc
+    C1 = sc.C[1]
+    C2 = sc.C[2]
+    C3 = sc.C[3]
+
+    
+    # Keep inc, e away from zero
+    if e<= 1.0E-4
+        e = 1.0E-4
+    end
+    if inc <= 1.0E-4
+        inc = 1.0E-4
+    end
+
     # Calculation
     dQdx = FiniteDiff.finite_difference_gradient(x->calculate_Q(x, params), x)
     Fx = F(a, e, inc, ape, tru, mu)
     R_H_O = hill_to_orbit_transform(inc, ape, lam, tru)  # rotation matrix for current states
     pvec = -transpose(dQdx'*Fx*R_H_O)
-    #=
-    for i in pvec
-        if isnan(i)
-            println(R_H_O)
-            println("___")
-            println(dQdx)
-            println("___")
-            println(Fx)
-            error("somethign in x")
-        end
-    end
-    =#
-    alphastar = calculate_alpha_star(pvec, sc)
+    px = pvec[1]
+    py = pvec[2]
+    pz = pvec[3]
+    
+    # Alphastar
+    k = px/sqrt(py^2+pz^2)
+    αstar0 = atan(0.25*(-3*k+sqrt(8+9*k^2)))
+    Fstar = k*(3*C1*cos(αstar0)^2+2*C2*cos(αstar0)+C3)*sin(αstar0)-C1*cos(αstar0)*(1-3*sin(αstar0)^2)-C2*cos(2*αstar0)
+    Fstar_prime = k*(3*C1*(cos(αstar0)-2*cos(αstar0)*sin(αstar0)) + 2*C2*cos(2*αstar0)+C3*cos(αstar0)) - 
+        C1*sin(αstar0)*(2-9*cos(αstar0)) + 2*C2*sin(2*αstar0)
+    alphastar = αstar0 - Fstar/Fstar_prime
     alphastar = median([params.alpha_min, alphastar, params.alpha_max]) # enforcing alphastar range constraint
-    betastar = atan(-pvec[2], -pvec[3])
+
+    # betastar
+    betastar = atan(-py, -pz)
     return alphastar, betastar, dQdx
 end
 
@@ -103,7 +117,7 @@ function calculate_Q(x, params)
         escape_constraint = a/aesc - 1
         P1 = params.Aimp*exp(params.kimp*impact_constraint)
         P2 = params.Aesc*exp(params.kesc*escape_constraint)
-        P = Wp*(P1 + P2)
+        P = P1 + P2
 
         # Scaling (a only)
         Sa = (1+((a-a_t)/(mpet*a_t))^npet)^(1/rpet);
@@ -239,7 +253,7 @@ function calculate_Q(x, params)
 
         ###################################################################################################################################################
         # PUTTING Q TOGETHER :)
-        Q = (1+P)*(Wa*Sa*tau_a^2 + We*tau_e^2 + Winc*tau_inc^2 + Wape*tau_ape^2 + Wlam*tau_lam^2)
+        Q = (1+Wp*P)*(Wa*Sa*tau_a^2 + We*tau_e^2 + Winc*tau_inc^2 + Wape*tau_ape^2 + Wlam*tau_lam^2)
         ###################################################################################################################################################
 
         return Q
@@ -301,4 +315,27 @@ function calculate_alpha_star(p, sc::basicSolarSail)
     alphastar = alphastar_0 - F_alpha/F_alpha_alpha;
 
     return alphastar
+end
+
+
+"""
+This is a function for debugging
+    analytical partial for penalty wrt eccentricity
+"""
+function analytical_dPde(e, a, params::QLawParams)
+    kimp = params.kimp
+    Aimp = params.Aimp
+    rpmin = params.rp_min
+    dPde = kimp*a/rpmin * Aimp*exp(kimp * (1-a*(1-e)/rpmin))
+
+end
+
+"""
+use finitediff on this and compare to above
+"""
+function Pfun(e, a, params)
+    kimp = params.kimp
+    Aimp = params.Aimp
+    rpmin = params.rp_min
+    P = Aimp*exp(kimp * (1-a*(1-e)/rpmin))
 end
