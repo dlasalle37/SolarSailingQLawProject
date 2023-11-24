@@ -2,7 +2,7 @@
 compute_control: function to compute alphastar and betastar at a given instant in time
 inputs: 
     -x: state vector [a, e, inc, ape, lam, tru] w/ units [km, none, rad, rad, rad, rad]
-    -dQdx: gradient of Q wrt state vector
+    -params: QLaw Params struct containing all supplementary info
 outputs: 
     -alphastar: control variable alpha at given time instant
     -betastar: control variable beta at given time instant
