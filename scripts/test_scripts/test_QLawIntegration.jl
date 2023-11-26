@@ -32,7 +32,7 @@ params = QLawParams(
     max_sim_time = 20.0*86400,
     step_size = 60.0,
     writeData=true,
-    kimp=1000
+    kimp=100
     )
 
 finalOE, exitcode = QLawIntegrator(params)
@@ -40,3 +40,6 @@ finalOE, exitcode = QLawIntegrator(params)
 println("Final Values: ", finalOE[1:6])
 println("Targets: ", XT)
 println(exitcode)
+
+unload("naif0012.tls")
+unload("de440.bsp")

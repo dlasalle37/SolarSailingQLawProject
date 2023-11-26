@@ -31,8 +31,16 @@ function compute_control(x, params::QLawParams)
         inc = 1.0E-4
     end
 
-    # Calculation
-    dQdx = FiniteDiff.finite_difference_gradient(x->calculate_Q(x, params), x)
+    # DQDX Calculation:
+    
+    #= Using ForwardDiff
+    out = similar(x)
+    func = X->calculate_Q(X, params)
+    cfg = ForwardDiff.GradientConfig(calculate_Q, x) # GradientConfig
+    dQdx = ForwardDiff.gradient!(out, x->calculate_Q(x, params), x, cfg)=#
+
+    dQdx = FiniteDiff.finite_difference_gradient(x->calculate_Q(x, params), x) # using finite diff
+    
     Fx = F(a, e, inc, ape, tru, mu)
     R_H_O = hill_to_orbit_transform(inc, ape, lam, tru)  # rotation matrix for current states
     pvec = -transpose(dQdx'*Fx*R_H_O)

@@ -7,9 +7,11 @@ using Plots
 using SPICE
 using StaticArrays
 using FiniteDiff
+using ForwardDiff
 using Statistics
 using LinearAlgebra
 using DelimitedFiles
+using Infiltrator
 
 #Includes
 include("constants.jl")
