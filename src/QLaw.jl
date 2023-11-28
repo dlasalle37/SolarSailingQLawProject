@@ -33,12 +33,13 @@ function compute_control(x, params::QLawParams)
 
     # DQDX Calculation:
     
-    #= Using ForwardDiff
-    out = similar(x)
-    func = X->calculate_Q(X, params)
-    cfg = ForwardDiff.GradientConfig(calculate_Q, x) # GradientConfig
-    dQdx = ForwardDiff.gradient!(out, x->calculate_Q(x, params), x, cfg)=#
-
+    #= 
+    There are two different numerical differentiation methods in the 3-line block below
+      To use ForwardDiff: uncomment first two lines, comment third line
+      To use FiniteDiff: uncomment third line, comment first two lines  
+    =#
+    #cfg = ForwardDiff.GradientConfig(calculate_Q, x) # GradientConfig
+    #dQdx = ForwardDiff.gradient(x->calculate_Q(x, params), x, cfg, Val{false}()) 
     dQdx = FiniteDiff.finite_difference_gradient(x->calculate_Q(x, params), x) # using finite diff
     
     Fx = F(a, e, inc, ape, tru, mu)
@@ -164,53 +165,21 @@ function calculate_Q(x, params)
         # BEST CASE TIME TO GO's
         # Semi-major axis:
         nustar_a = atan(sig_a*se, -sig_a*sp)
-        R_H_O_star_a = hill_to_orbit_transform(inc, ape, lam, nustar_a)
-        F_a = F(a, e, inc, ape, nustar_a, mu)
-        p_a = -transpose(sig_a*eps_a'*F_a*R_H_O_star_a);
-        p_ay = p_a[2] 
-        p_az = p_a[3]
-        betastar_a = atan(-p_ay, -p_az)
-        alphastar_a = calculate_alpha_star(p_a, sc)
-        alphastar_a = median([params.alpha_min, alphastar_a, params.alpha_max]) # enforcing alphastar range constraint
-        ustar_a = @SVector [alphastar_a; betastar_a]  # elementwise optimal control (EOC)
-        astar_hill = aSRP(ustar_a, sc, eph, tru_E) # SRP accel. evaluated at EOC
-        adotnn = sig_a*eps_a'*f0 - p_a'*astar_hill # positive denominator of best-case ttg for A
+        adotnn = oedotnn(a, e, inc, ape, lam, nustar_a, sig_a, eps_a, tru_E, f0, params)
         tau_a = abs(dista)/-adotnn  # best-case ttg term
         
         # Ecccentricity
             # For eccentricity, two edotnn's are computed and compared, smaller is taken and used in Q
-            # This will be done in the below for loop
-        edotnn_set = [0.0, 0.0]
-        for n = [0, 1]
-            nustar_e = 0.5*atan(sig_e*se, -sig_e*sp) + n*pi
-            R_H_O_star_e = hill_to_orbit_transform(inc, ape, lam, nustar_e)
-            F_e = F(a, e, inc, ape, nustar_e, mu)
-            p_e = -transpose(sig_e*eps_e'*F_e*R_H_O_star_e);
-            p_ey = p_e[2]
-            p_ez = p_e[3]
-            betastar_e = atan(-p_ey, -p_ez)
-            alphastar_e = calculate_alpha_star(p_e, sc)
-            alphastar_e = median([params.alpha_min, alphastar_e, params.alpha_max])
-            ustar_e = @SVector [alphastar_e; betastar_e]  # EOC
-            astar_hill = aSRP(ustar_e, sc, eph, tru_E)
-            edotnn_set[n+1] = sig_e*eps_e'*f0 - p_e'*astar_hill
-        end
-        edotnn = min(edotnn_set[1], edotnn_set[2])
+        nustar_e1 = 0.5*atan(sig_e*se, -sig_e*sp) + 0*pi
+        nustar_e2 = 0.5*atan(sig_e*se, -sig_e*sp) + 1*pi
+        edotnn1 = oedotnn(a, e, inc, ape, lam, nustar_e1, sig_e, eps_e, tru_E, f0, params)
+        edotnn2 = oedotnn(a, e, inc, ape, lam, nustar_e2, sig_e, eps_e, tru_E, f0, params)
+        edotnn = min(edotnn1, edotnn2)
         tau_e = abs(diste)/-edotnn
 
         # Inclination
         nustar_inc = pi/2 - ape + sign(sig_inc*sh)*(asin(e*sin(ape))+pi/2)
-        R_H_O_star_inc = hill_to_orbit_transform(inc, ape, lam, nustar_inc)
-        F_inc = F(a, e, inc, ape, nustar_inc, mu)
-        p_inc = -transpose(sig_inc*eps_inc'*F_inc*R_H_O_star_inc);
-        p_incy = p_inc[2]
-        p_incz = p_inc[3]
-        betastar_inc = atan(-p_incy, -p_incz)
-        alphastar_inc = calculate_alpha_star(p_inc, sc)
-        alphastar_inc = median([params.alpha_min, alphastar_inc, params.alpha_max])
-        ustar_inc = @SVector [alphastar_inc; betastar_inc]
-        astar_hill = aSRP(ustar_inc, sc, eph, tru_E)
-        incdotnn = sig_inc*eps_inc'*f0 - p_inc'*astar_hill
+        incdotnn = oedotnn(a, e, inc, ape, lam, nustar_inc, sig_inc, eps_inc, tru_E, f0, params)
         tau_inc = abs(distinc)/-incdotnn
 
         # Argument of periapsis
@@ -226,17 +195,7 @@ function calculate_Q(x, params)
             nustar_ape = nu[argmin(mappedvals)] # the nu that minimized mappedvals is the approx. nustar for ape
 
             # From here, it is the same as the others
-            R_H_O_star_ape = hill_to_orbit_transform(inc, ape, lam, nustar_ape)
-            F_ape = F(a, e, inc, ape, nustar_ape, mu)
-            p_ape = -transpose(sig_ape*eps_ape'*F_ape*R_H_O_star_ape);
-            p_apey = p_ape[2]
-            p_apez = p_ape[3]
-            betastar_ape = atan(-p_apey, -p_apez)
-            alphastar_ape = calculate_alpha_star(p_ape, sc)
-            alphastar_ape = median([params.alpha_min, alphastar_ape, params.alpha_max])
-            ustar_ape = @SVector [alphastar_ape; betastar_ape]
-            astar_hill = aSRP(ustar_ape, sc, eph, tru_E)
-            apedotnn = sig_ape*eps_ape'*f0 - p_ape'*astar_hill
+            apedotnn = oedotnn(a, e, inc, ape, lam, nustar_ape, sig_ape, eps_ape, tru_E, f0, params)
             tau_ape = abs(distape)/-apedotnn
         end
 
@@ -245,17 +204,7 @@ function calculate_Q(x, params)
             tau_lam = 0.0
         else # only calculate if Wlam !=0
             nustar_lam = pi - ape + sign(sig_lam*sh/sin(inc))*acos(e*cos(ape))
-            R_H_O_star_lam = hill_to_orbit_transform(inc, ape, lam, nustar_lam)
-            F_lam = F(a, e, inc, ape, nustar_lam, mu)
-            p_lam = -transpose(sig_lam*eps_lam'*F_lam*R_H_O_star_lam);
-            p_lamy = p_lam[2]
-            p_lamz = p_lam[3]
-            betastar_lam = atan(-p_lamy, -p_lamz)
-            alphastar_lam = calculate_alpha_star(p_lam, sc)
-            alphastar_lam = median([params.alpha_min, alphastar_lam, params.alpha_max])
-            ustar_lam = @SVector [alphastar_lam; betastar_lam]
-            astar_hill = aSRP(ustar_lam, sc, eph, tru_E)
-            lamdotnn = sig_lam*eps_lam'*f0 - p_lam'*astar_hill
+            lamdotnn = oedotnn(a, e, inc, ape, lam, nustar_lam, sig_lam, eps_lam, tru_E, f0, params)
             tau_lam = abs(distlam)/-lamdotnn
         end
 
@@ -265,6 +214,42 @@ function calculate_Q(x, params)
         ###################################################################################################################################################
 
         return Q
+end
+
+"""
+oedotnn: calculate the oedotnn term in best-case time-to-go based on nustar_oe
+INPUTS:
+    a: semi-major axis[km]
+    e: eccentricity
+    inc: inclination [rad]
+    ape: arg. periapsis [rad]
+    lam: longitude of ascending node [rad]
+    nustar_oe: optimal true anomaly for element in oe
+    sig_oe: sigma function for element in oe
+    eps_oe: selection vector for given element in oe (e.g. [0 1 0 0 0 0] for e)
+    tru_E: earth true anomaly at time of calculation [rad]
+    f0: ballistic evolution vector at time of calculation [rad/s]
+    params: QLawParams struct containing supplementary info
+OUTPUT:
+    oedotnn: positive denominator of best-case time-to-go for given element in oe
+"""
+function oedotnn(a, e, inc, ape, lam, nustar_oe, sig_oe, eps_oe, tru_E, f0, params::QLawParams)
+    sc = params.sc
+    mu = params.mu
+    eph = params.eph
+
+    R_H_O_star = hill_to_orbit_transform(inc, ape, lam, nustar_oe)
+    Foe = F(a, e, inc, ape, nustar_oe, mu)
+    pvec = -transpose(sig_oe*eps_oe'*Foe*R_H_O_star);
+    py = pvec[2] 
+    pz = pvec[3]
+    betastar = atan(-py, -pz)
+    alphastar = calculate_alpha_star(pvec, sc)
+    alphastar = median([params.alpha_min, alphastar, params.alpha_max]) # enforcing alphastar range constraint
+    ustar = @SVector [alphastar; betastar]  # elementwise optimal control (EOC)
+    astar_hill = aSRP(ustar, sc, eph, tru_E) # SRP accel. evaluated at EOC
+    oedotnn = sig_oe*eps_oe'*f0 - pvec'*astar_hill # positive denominator of best-case ttg for A
+    return oedotnn
 end
 
 

@@ -13,4 +13,3 @@ x = @MArray [2.6; 1.4; 9.8; 7.1; 0.1; 1.2] # state vector
 params = [2]
 
 R = FiniteDiff.finite_difference_gradient(x->Qf(x, params), x)
-

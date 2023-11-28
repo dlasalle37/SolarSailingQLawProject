@@ -34,7 +34,7 @@ function solarSailEOM_cartesian!(dx, x, p, t)
 end
 
 """
-aSRP: A functiomn to be called within the Q calculation, made for calculating the SRP acceleration with elementwise optimal controls (and true anomaly)
+aSRP: calculating SRP acceleration in the Hill (Sun centered) frame
 Notes:
     - SRP acceleration vector is calculated in the sun-centered hill frame
 inputs:
