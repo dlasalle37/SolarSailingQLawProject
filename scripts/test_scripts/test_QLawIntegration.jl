@@ -1,6 +1,8 @@
 using DrWatson
 @quickactivate "SolarSailingQLawProject"
 include(srcdir("Includes.jl"))
+using DelimitedFiles
+import GLMakie as GM
 
 ## SPICE SETUP
 furnsh("naif0012.tls")
@@ -40,6 +42,33 @@ finalOE, exitcode = QLawIntegrator(params)
 println("Final Values: ", finalOE[1:6])
 println("Targets: ", XT)
 println(exitcode)
+
+# ===== Plotting
+# First read the data
+kep = readdlm(datadir("kep.txt"), '\t', '\n'; header=false)
+
+# Convert to cartesian
+cart = Matrix{Float64}(undef, size(kep))
+for row in axes(kep, 1)
+    r, v = coe2rv(kep[row,1], kep[row,2], kep[row,3], kep[row,4], kep[row,5], kep[row,6], 398600.4418)
+    cart[row,1:3] .= r
+    cart[row,4:6] .= v
+end
+
+# Plot 3d figure
+fig = GM.Figure(;
+    size = (1920,1080),
+)
+
+ax = GM.Axis3(
+    fig[1,1]; 
+    aspect = :data, 
+    xlabel = "x [km]", 
+    ylabel = "y [km]", 
+    zlabel = "z [km]",
+)
+
+GM.lines!(ax, cart[:,1], cart[:,2], cart[:,3], color=:blue, linewidth=0.5)
 
 unload("naif0012.tls")
 unload("de440.bsp")

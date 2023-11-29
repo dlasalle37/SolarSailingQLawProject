@@ -53,8 +53,8 @@ function compute_control(x, params::QLawParams)
     k = px/sqrt(py^2+pz^2)
     αstar0 = atan(0.25*(-3*k+sqrt(8+9*k^2)))
     Fstar = k*(3*C1*cos(αstar0)^2+2*C2*cos(αstar0)+C3)*sin(αstar0)-C1*cos(αstar0)*(1-3*sin(αstar0)^2)-C2*cos(2*αstar0)
-    Fstar_prime = k*(3*C1*(cos(αstar0)-2*cos(αstar0)*sin(αstar0)) + 2*C2*cos(2*αstar0)+C3*cos(αstar0)) - 
-        C1*sin(αstar0)*(2-9*cos(αstar0)) + 2*C2*sin(2*αstar0)
+    Fstar_prime = k*(3*C1*(cos(αstar0)^3-2*cos(αstar0)*sin(αstar0)) + 2*C2*cos(2*αstar0)+C3*cos(αstar0)) - 
+        C1*sin(αstar0)*(2-9*cos(αstar0)^2) + 2*C2*sin(2*αstar0)
     alphastar = αstar0 - Fstar/Fstar_prime
     alphastar = median([params.alpha_min, alphastar, params.alpha_max]) # enforcing alphastar range constraint
 
