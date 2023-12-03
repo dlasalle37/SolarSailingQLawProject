@@ -36,9 +36,9 @@ params = QLawParams(
     writeData=true,
     kimp=100
     )
-
 finalOE, exitcode = QLawIntegrator(params)
 
+println("Starting Values: ", X0[1:6])
 println("Final Values: ", finalOE[1:6])
 println("Targets: ", XT)
 println(exitcode)

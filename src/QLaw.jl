@@ -126,7 +126,7 @@ function calculate_Q(x, params)
         escape_constraint = a/aesc - 1
         P1 = params.Aimp*exp(params.kimp*impact_constraint)
         P2 = params.Aesc*exp(params.kesc*escape_constraint)
-        P = P1 + P2
+        P = Wp*(P1 + P2)
 
         # Scaling (a only)
         Sa = (1+((a-a_t)/(mpet*a_t))^npet)^(1/rpet);
@@ -165,21 +165,21 @@ function calculate_Q(x, params)
         # BEST CASE TIME TO GO's
         # Semi-major axis:
         nustar_a = atan(sig_a*se, -sig_a*sp)
-        adotnn = oedotnn(a, e, inc, ape, lam, nustar_a, sig_a, eps_a, tru_E, f0, params)
+        adotnn = oedotnn(a, e, inc, ape, lam, tru, nustar_a, sig_a, eps_a, tru_E, f0, params)
         tau_a = abs(dista)/-adotnn  # best-case ttg term
         
         # Ecccentricity
             # For eccentricity, two edotnn's are computed and compared, smaller is taken and used in Q
         nustar_e1 = 0.5*atan(sig_e*se, -sig_e*sp) + 0*pi
         nustar_e2 = 0.5*atan(sig_e*se, -sig_e*sp) + 1*pi
-        edotnn1 = oedotnn(a, e, inc, ape, lam, nustar_e1, sig_e, eps_e, tru_E, f0, params)
-        edotnn2 = oedotnn(a, e, inc, ape, lam, nustar_e2, sig_e, eps_e, tru_E, f0, params)
+        edotnn1 = oedotnn(a, e, inc, ape, lam, tru, nustar_e1, sig_e, eps_e, tru_E, f0, params)
+        edotnn2 = oedotnn(a, e, inc, ape, lam, tru, nustar_e2, sig_e, eps_e, tru_E, f0, params)
         edotnn = min(edotnn1, edotnn2)
         tau_e = abs(diste)/-edotnn
 
         # Inclination
         nustar_inc = pi/2 - ape + sign(sig_inc*sh)*(asin(e*sin(ape))+pi/2)
-        incdotnn = oedotnn(a, e, inc, ape, lam, nustar_inc, sig_inc, eps_inc, tru_E, f0, params)
+        incdotnn = oedotnn(a, e, inc, ape, lam, tru, nustar_inc, sig_inc, eps_inc, tru_E, f0, params)
         tau_inc = abs(distinc)/-incdotnn
 
         # Argument of periapsis
@@ -195,7 +195,7 @@ function calculate_Q(x, params)
             nustar_ape = nu[argmin(mappedvals)] # the nu that minimized mappedvals is the approx. nustar for ape
 
             # From here, it is the same as the others
-            apedotnn = oedotnn(a, e, inc, ape, lam, nustar_ape, sig_ape, eps_ape, tru_E, f0, params)
+            apedotnn = oedotnn(a, e, inc, ape, lam, tru, nustar_ape, sig_ape, eps_ape, tru_E, f0, params)
             tau_ape = abs(distape)/-apedotnn
         end
 
@@ -204,7 +204,7 @@ function calculate_Q(x, params)
             tau_lam = 0.0
         else # only calculate if Wlam !=0
             nustar_lam = pi - ape + sign(sig_lam*sh/sin(inc))*acos(e*cos(ape))
-            lamdotnn = oedotnn(a, e, inc, ape, lam, nustar_lam, sig_lam, eps_lam, tru_E, f0, params)
+            lamdotnn = oedotnn(a, e, inc, ape, lam, tru, nustar_lam, sig_lam, eps_lam, tru_E, f0, params)
             tau_lam = abs(distlam)/-lamdotnn
         end
 
@@ -233,7 +233,7 @@ INPUTS:
 OUTPUT:
     oedotnn: positive denominator of best-case time-to-go for given element in oe
 """
-function oedotnn(a, e, inc, ape, lam, nustar_oe, sig_oe, eps_oe, tru_E, f0, params::QLawParams)
+function oedotnn(a, e, inc, ape, lam, tru, nustar_oe, sig_oe, eps_oe, tru_E, f0, params::QLawParams)
     sc = params.sc
     mu = params.mu
     eph = params.eph
@@ -291,21 +291,19 @@ Inputs:
 p: p_oe vector, calculated at an optimal true anomaly 
 """
 function calculate_alpha_star(p, sc::basicSolarSail)
-    p_x = p[1] 
-    p_y = p[2] 
-    p_z = p[3]
+    px = p[1] 
+    py = p[2] 
+    pz = p[3]
     C1 = sc.C[1]
     C2 = sc.C[2]
     C3 = sc.C[3]
 
-    k = p_x/sqrt(p_y^2 + p_z^2);
-    alphastar_0 = atan(1/4 * (-3*k + sqrt(8+9*k^2)));
-
-    F_alpha = k*(3*C1*cos(alphastar_0)^2 + 2*C2*cos(alphastar_0) + C3)*sin(alphastar_0) - C1*cos(alphastar_0)*(1-3*sin(alphastar_0)^2) - C2*cos(2*alphastar_0);
-
-    F_alpha_alpha = k*(3*C1*(cos(alphastar_0)-2*cos(alphastar_0)*sin(alphastar_0)) + 2*C2*cos(2*alphastar_0) + C3*cos(alphastar_0)) - C1*sin(alphastar_0)*(2-9*cos(alphastar_0))+2*C2*sin(2*alphastar_0);
-
-    alphastar = alphastar_0 - F_alpha/F_alpha_alpha;
+    k = px/sqrt(py^2+pz^2)
+    αstar0 = atan(0.25*(-3*k+sqrt(8+9*k^2)))
+    Fstar = k*(3*C1*cos(αstar0)^2+2*C2*cos(αstar0)+C3)*sin(αstar0)-C1*cos(αstar0)*(1-3*sin(αstar0)^2)-C2*cos(2*αstar0)
+    Fstar_prime = k*(3*C1*(cos(αstar0)^3-2*cos(αstar0)*sin(αstar0)^2) + 2*C2*cos(2*αstar0)+C3*cos(αstar0)) - 
+        C1*sin(αstar0)*(2-9*cos(αstar0)^2) + 2*C2*sin(2*αstar0)
+    alphastar = αstar0 - Fstar/Fstar_prime
 
     return alphastar
 end
