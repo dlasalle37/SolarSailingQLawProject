@@ -63,21 +63,22 @@ function aSRP(u, sc::basicSolarSail, eph::TwoBodyEphemeride, trueAnom_Earth)
     return a_SRP
 end
 
-
+"""
+Function: aSRP_orbitFrame
+Description:
+    Calculating the SRP acceleration on the solar sail in the sc-centered orbit (LVLH) frame
+INPUTS:
+spacecraftState: current Keplerian orbital elements of s/c
+u: control vector containing:
+    α: cone angle (radians)
+    β: clock angle (radians)
+sc: solar sail struct 
+trueAnom_earth: earth current true anomaly (to calculate SRP at)
+eph: ephemeride struct
+OUTPUTS:
+aSRP_oFrame: acceleration vector in the orbit frame [km/s^2]
+"""
 function aSRP_orbitFrame(spacecraftState, u, sc::basicSolarSail, trueAnom_earth, eph::TwoBodyEphemeride)
-    #=
-    INPUTS:
-        spacecraftState: current Keplerian orbital elements of s/c
-        u: control vector containing:
-            α: cone angle (radians)
-            β: clock angle (radians)
-        sc: solar sail struct 
-        trueAnom_earth: earth current true anomaly (to calculate SRP at)
-        eph: ephemeride struct
-    OUTPUTS:
-        aSRP_oFrame: acceleration vector in the orbit frame [km/s^2]
-        earth_coe: keplerian orbital elements of earth at current time (saving space)
-    =#
     # unpack current state
     method = sc.method
     inc = spacecraftState[3]; 
@@ -168,3 +169,80 @@ function gauss_variational_eqn!(dx, x, params::QLawParams, t)
 
     #dx[1:6] .= f0 + F*[0; 1E-7; 0] # uncomment to test EOM
 end
+
+"""
+Function: QLawEOM
+Description:
+    Equation of motion with QLaw-calculated control angles
+Inputs: 
+    dx: derivative vector (for in-place from)
+    x: state vector (Keplerian orbital elements)
+    params: QLawParams
+    t: time [s]
+"""
+function QLawEOM!(dx, x, params::QLawParams, t)
+    # Unpack
+    eph = params.eph # ephemeride struct containing earth's helio position at epoch and epoch time in ephemeris time
+    mu = params.mu
+    a = x[1]
+    e = x[2]
+    inc = x[3]
+    argPer = x[4]
+    lambda = x[5]
+    trueAnom = x[6]
+
+    #Check for NaN/Infs in time
+    if isnan(t) || isinf(t)
+        error("Time is $t")
+    end
+
+    # Update params current time
+    params.current_time = eph.t0+t # current time in ephemeris time [s]
+
+    # Update Earth Position
+    nue = get_heliocentric_position(eph, params.current_time)
+
+    # Check for state convergence
+    # Stopping criteria
+    # Compute targeting error
+    aerr                = params.Woe[1]*abs(x[1] - params.oet[1]) - params.oeTols[1]
+    eerr                = params.Woe[2]*abs(x[2] - params.oet[2]) - params.oeTols[2]
+    ierr                = params.Woe[3]*abs(x[3] - params.oet[3]) - params.oeTols[3]
+    ωerr                = params.Woe[4]*abs(acos(cos(x[4] - params.oet[4]))) - params.oeTols[4]
+    λerr                = params.Woe[5]*abs(acos(cos(x[5] - params.oet[5]))) - params.oeTols[5]
+    targError           = @SVector [aerr, eerr, ierr, ωerr, λerr]
+    if maximum(targError) <= 0
+            alphastar = pi/2; # this value of alpha will zero out SRP
+            betastar = 0; # arbitrary value of betastar
+    else
+            # Compute Control:
+            alphastar, betastar = compute_control(x, params)
+    end
+
+    u = @SVector [alphastar; betastar]
+    ## Compute derivatives based on control:
+    a_SRP_O = aSRP_orbitFrame(x, u, sc, nue, eph);  # SRP acceleration resolved into the O (orbit) frame where O{s/c, er_hat, eθ_hat, eh_hat}
+    p = a*(1-e^2)  # s/c semi-latus [km]
+    r = p/(1+e*cos(trueAnom)) # s/c radial distance from earth [km]
+    h = sqrt(mu*p)  # s/c specific angular momentum [km^2/s]
+    nuDot = sqrt(mu/a^3)*(1+e*cos(trueAnom))^2 / (1-e^2)^(3/2) # s/c ballistic evolution
+    ae = eph.semiMajorAxis
+    ee = eph.eccentricity
+    mu_sun = params.mu_sun
+    nuDot_earth = sqrt(mu_sun/ae^3)*(1+ee*cos(nue))^2 / (1-ee^2)^(3/2) 
+    f0 = [0;0;0;0; -nuDot_earth; nuDot]
+    F = 
+    1/h*[
+        2*a^2*e*sin(trueAnom) 2*a^2*p/r 0;
+        p*sin(trueAnom) (p+r)*cos(trueAnom)+r*e 0;
+        0 0 r*cos(trueAnom+argPer);
+        -p*cos(trueAnom)/e (p+r)*sin(trueAnom)/e -r*sin(trueAnom+argPer)/tan(inc);
+        0 0 r*sin(trueAnom+argPer)/sin(inc);
+        p*cos(trueAnom)/e -(p+r)*sin(trueAnom)/e 0;
+    ]
+
+    dx[1:6] .= f0 + F*(a_SRP_O); 
+end
+
+
+    
