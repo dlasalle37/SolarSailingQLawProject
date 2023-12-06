@@ -206,6 +206,10 @@ function get_heliocentric_position(eph::TwoBodyEphemeride, tf; tol=1.0E-6)
     end
     E=Ek
     νf = 2*atan(sqrt((1+e)/(1-e)) * tan(E/2))
+    if νf < 0 # putting νf on range 0-2pi
+        νf += 2*pi
+    end
+
     return νf
 end
 

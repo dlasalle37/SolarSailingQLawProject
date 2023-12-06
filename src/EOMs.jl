@@ -14,7 +14,7 @@ function solarSailEOM_cartesian!(dx, x, p, t)
     C1 = sc.C[1]; C2 = sc.C[2]; C3=sc.C[3];
     A = sc.areaParam
     nHat = [1; 0; 0]  # sail vector aligned with inertial x
-    G0 = 1.02E14
+    G0 = 1.02E14 # [kgkm/s^2]
     sunDist = 1.46E8
     (sHat, sunDist) = get_sunlight_direction(epoch+t)  # sHat expressed in ECI frame
     α = pi - acos(dot(nHat, sHat))  # alpha is the angle b/w the anti-sunlight direction and nHat
@@ -55,7 +55,7 @@ function aSRP(u, sc::basicSolarSail, eph::TwoBodyEphemeride, trueAnom_Earth)
     C3 = sc.C[3]
     d = distance_to_sun(eph, trueAnom_Earth)
     C1 = sc.C[1]; C2 = sc.C[2]; C3 = sc.C[3]
-    G0 = 1.02E14 # solar flux constant at earth
+    G0 = 1.02E14 # solar flux constant at earth [kgkm/s^2]
     a1 = C1*(cos(α))^2+C2*cos(α)+C3  # sun frame r-direction, not scaled
     a2 = -(C1*cos(α)+C2)*sin(α)sin(β)  # sun frame theta-direction, not scaled
     a3 = -(C1*cos(α)+C2)*sin(α)cos(β)  # sun frame h-direction, not scaled
@@ -197,10 +197,13 @@ function QLawEOM!(dx, x, params::QLawParams, t)
     end
 
     # Update params current time
-    params.current_time = eph.t0+t # current time in ephemeris time [s]
+    params.current_time = t # current time in ephemeris time [s]
 
     # Update Earth Position
-    nue = get_heliocentric_position(eph, params.current_time)
+    nue = get_heliocentric_position(eph, t)
+
+    # Compute Control:
+    alphastar, betastar, dQdx = compute_control(x, params)
 
     # Check for state convergence
     # Stopping criteria
@@ -212,12 +215,9 @@ function QLawEOM!(dx, x, params::QLawParams, t)
     λerr                = params.Woe[5]*abs(acos(cos(x[5] - params.oet[5]))) - params.oeTols[5]
     targError           = @SVector [aerr, eerr, ierr, ωerr, λerr]
     if maximum(targError) <= 0
-            alphastar = pi/2; # this value of alpha will zero out SRP
-            betastar = 0; # arbitrary value of betastar
-    else
-            # Compute Control:
-            alphastar, betastar = compute_control(x, params)
+            params.terminate = true
     end
+
 
     u = @SVector [alphastar; betastar]
     ## Compute derivatives based on control:
@@ -241,8 +241,15 @@ function QLawEOM!(dx, x, params::QLawParams, t)
         p*cos(trueAnom)/e -(p+r)*sin(trueAnom)/e 0;
     ]
 
-    dx[1:6] .= f0 + F*(a_SRP_O); 
-end
-
-
     
+    # Check Lyapunov function [dQdt should be negative]
+    dQdt = dQdx'*(f0 + F*(a_SRP_O))
+    if  dQdt > 0.0
+        @infiltrate false # for debugging
+        alphastar = pi/2 # if dQdt>0, zero out SRP acceleration from the sail by setting alpha=90deg
+        a_SRP_O = aSRP_orbitFrame(x, [alphastar; betastar], sc, nue, eph);
+        #error("Lyapunov condition (dQdt<0) not met at t=$t. dQdt at this time: $dQdt")
+    end
+    dx[1:6] .= f0 + F*(a_SRP_O); 
+    @infiltrate false # this is a good point for debugging, set false->true to turn on breakpoint
+end

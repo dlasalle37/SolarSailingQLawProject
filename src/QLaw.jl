@@ -38,9 +38,9 @@ function compute_control(x, params::QLawParams)
       To use ForwardDiff: uncomment first two lines, comment third line
       To use FiniteDiff: uncomment third line, comment first two lines  
     =#
-    #cfg = ForwardDiff.GradientConfig(calculate_Q, x) # GradientConfig
-    #dQdx = ForwardDiff.gradient(x->calculate_Q(x, params), x, cfg, Val{false}()) 
-    dQdx = FiniteDiff.finite_difference_gradient(x->calculate_Q(x, params), x) # using finite diff
+    cfg = ForwardDiff.GradientConfig(calculate_Q, x) # GradientConfig
+    dQdx = ForwardDiff.gradient(x->calculate_Q(x, params), x, cfg, Val{false}()) 
+    #dQdx = FiniteDiff.finite_difference_gradient(x->calculate_Q(x, params), x) # using finite diff
     
     Fx = F(a, e, inc, ape, tru, mu)
     R_H_O = hill_to_orbit_transform(inc, ape, lam, tru)  # rotation matrix for current states
@@ -111,8 +111,7 @@ function calculate_Q(x, params)
         ## Create Q
         # Some initial terms
         p = a*(1-e^2) # semi-latus rectum
-        h = sqrt(mu*p) # spec. angular momentum
-
+        h = sqrt(mu*p)
         # Element Selection vectors
         eps_a = [1; 0; 0; 0; 0; 0]
         eps_e = [0; 1; 0; 0; 0; 0] 
@@ -137,7 +136,6 @@ function calculate_Q(x, params)
         distinc = inc - inc_t;
         distape = acos(cos(ape - ape_t));
         distlam = acos(cos(lam-lam_t));
-
         # Sign Functions
         sig_a = sign(dista);
         sig_e = sign(diste);
@@ -153,7 +151,7 @@ function calculate_Q(x, params)
         ]
         se = svec_P[1]; sp = svec_P[2]; sh = svec_P[3]; #breaking it down
 
-        # Ballistic Evolution of state (as a function of xslow)
+        # Ballistic Evolution of state (as a function of x)
         e_E = eph.eccentricity
         a_E = eph.semiMajorAxis
         tru_E = get_heliocentric_position(eph, t) # earth heliocentric true anom evaluated at current time
@@ -175,8 +173,19 @@ function calculate_Q(x, params)
         edotnn1 = oedotnn(a, e, inc, ape, lam, tru, nustar_e1, sig_e, eps_e, tru_E, f0, params)
         edotnn2 = oedotnn(a, e, inc, ape, lam, tru, nustar_e2, sig_e, eps_e, tru_E, f0, params)
         edotnn = min(edotnn1, edotnn2)
-        tau_e = abs(diste)/-edotnn
 
+        # need to clip edotnn if it is near-zero 
+        d = distance_to_sun(eph, tru_E)
+        G0 = 1.02E14 # solar flux constant at earth [kgkm/s^2]
+        a_over_m = sc.areaParam
+        ε = 1.0E-5 # given in the Oguri paper as a constant for numerical simulations
+        clip_val = -ε*a_over_m*(G0/d^2)*sqrt(a_t/mu)
+        if abs(edotnn) <= abs(clip_val) # edotnn should be negative, and needs to be clipped if nearer to zero than clip_val
+            edotnn = clip_val
+        end
+
+        tau_e = abs(diste)/-edotnn
+        
         # Inclination
         nustar_inc = pi/2 - ape + sign(sig_inc*sh)*(asin(e*sin(ape))+pi/2)
         incdotnn = oedotnn(a, e, inc, ape, lam, tru, nustar_inc, sig_inc, eps_inc, tru_E, f0, params)
@@ -212,7 +221,7 @@ function calculate_Q(x, params)
         # PUTTING Q TOGETHER :)
         Q = (1+Wp*P)*(Wa*Sa*tau_a^2 + We*tau_e^2 + Winc*tau_inc^2 + Wape*tau_ape^2 + Wlam*tau_lam^2)
         ###################################################################################################################################################
-
+        @infiltrate false
         return Q
 end
 
@@ -236,8 +245,8 @@ OUTPUT:
 function oedotnn(a, e, inc, ape, lam, tru, nustar_oe, sig_oe, eps_oe, tru_E, f0, params::QLawParams)
     sc = params.sc
     mu = params.mu
+    mu_sun = params.mu_sun
     eph = params.eph
-
     R_H_O_star = hill_to_orbit_transform(inc, ape, lam, nustar_oe)
     Foe = F(a, e, inc, ape, nustar_oe, mu)
     pvec = -transpose(sig_oe*eps_oe'*Foe*R_H_O_star);

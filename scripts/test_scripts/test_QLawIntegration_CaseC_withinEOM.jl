@@ -11,7 +11,7 @@ furnsh("de440.bsp")
 # Simulation time setup:
 date = "2023-01-01T12:30:00" 
 startTime = utc2et(date)  # start date in seconds past j2000
-simTime = 20.0*86400 # amount of time [s] to simulate for
+simTime = 20*86400 # amount of time [s] to simulate for
 endTime = startTime+simTime
 
 # QLaw Parameter setup
@@ -40,10 +40,42 @@ abstol = 1.0E-6
 reltol = 1.0E-6
 tspan = (startTime, endTime)
 prob = ODEProblem(QLawEOM!, X0, tspan, params, abstol=abstol, reltol=reltol)
-sol = solve(prob)
+sol = solve(prob,  saveat=60)
 
 print("End Values: ")
 println(sol.u[end])
+#######################################################################################################################################################
+# Writing
+if params.writeData
+    open(datadir("kep.txt"),   "w") do io; writedlm(io,  sol.u); end
+end
+
+# ===== Plotting
+# First read the data
+kep = readdlm(datadir("kep.txt"), '\t', '\n'; header=false)
+
+# Convert to cartesian
+cart = Matrix{Float64}(undef, size(kep))
+for row in axes(kep, 1)
+    r, v = coe2rv(kep[row,1], kep[row,2], kep[row,3], kep[row,4], kep[row,5], kep[row,6], 398600.4418)
+    cart[row,1:3] .= r
+    cart[row,4:6] .= v
+end
+
+# Plot 3d figure
+fig = GM.Figure(;
+    size = (1920,1080),
+)
+
+ax = GM.Axis3(
+    fig[1,1]; 
+    aspect = :data, 
+    xlabel = "x [km]", 
+    ylabel = "y [km]", 
+    zlabel = "z [km]",
+)
+
+GM.lines!(ax, cart[:,1], cart[:,2], cart[:,3], color=:blue, linewidth=0.5)
 
 # Unload Kernels
 unload("naif0012.tls")
