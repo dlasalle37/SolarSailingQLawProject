@@ -215,7 +215,7 @@ function QLawEOM!(dx, x, params::QLawParams, t)
     λerr                = params.Woe[5]*abs(acos(cos(x[5] - params.oet[5]))) - params.oeTols[5]
     targError           = @SVector [aerr, eerr, ierr, ωerr, λerr]
     if maximum(targError) <= 0
-            params.terminate = true
+        @infiltrate
     end
 
 

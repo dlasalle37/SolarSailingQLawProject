@@ -51,8 +51,6 @@ mutable struct QLawParams
     # Writing data
     writeData::Bool
 
-    # Stopping condition
-    terminate::Bool
 end
 
 
@@ -86,14 +84,13 @@ function QLawParams(
     max_sim_time = 100*86400.0, # seconds (days*sec/day)
     abstol=1.0E-6,
     reltol=1.0E-6,
-    writeData=true,
-    term=false # set to true in ode when condition is met
+    writeData=true
 )
     current_time = eph.t0
 
     qlawparam = QLawParams(sc, eph, mu, mu_sun, current_time, alpha, beta, oe0, oet, oeTols, Woe, Wp, 
         Aimp, kimp, Aesc, kesc, rp_min, a_esc, m_petro, n_petro, r_petro, alpha_min, alpha_max, beta_min, beta_max, step_size, max_sim_time, abstol, reltol,
-        writeData, term)
+        writeData)
 
     return qlawparam
 end
