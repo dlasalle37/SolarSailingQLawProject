@@ -38,9 +38,9 @@ function compute_control(x, params::QLawParams)
       To use ForwardDiff: uncomment first two lines, comment third line
       To use FiniteDiff: uncomment third line, comment first two lines  
     =#
-    cfg = ForwardDiff.GradientConfig(calculate_Q, x) # GradientConfig
-    dQdx = ForwardDiff.gradient(x->calculate_Q(x, params), x, cfg, Val{false}()) 
-    #dQdx = FiniteDiff.finite_difference_gradient(x->calculate_Q(x, params), x) # using finite diff
+    #cfg = ForwardDiff.GradientConfig(calculate_Q, x) # GradientConfig
+    #dQdx = ForwardDiff.gradient(x->calculate_Q(x, params), x, cfg, Val{false}()) 
+    dQdx = FiniteDiff.finite_difference_gradient(x->calculate_Q(x, params), x) # using finite diff
     
     Fx = F(a, e, inc, ape, tru, mu)
     R_H_O = hill_to_orbit_transform(inc, ape, lam, tru)  # rotation matrix for current states
@@ -111,6 +111,9 @@ function calculate_Q(x, params)
         ## Create Q
         # Some initial terms
         p = a*(1-e^2) # semi-latus rectum
+        if mu*p <0
+            @infiltrate
+        end
         h = sqrt(mu*p)
         # Element Selection vectors
         eps_a = [1; 0; 0; 0; 0; 0]
@@ -221,7 +224,7 @@ function calculate_Q(x, params)
         # PUTTING Q TOGETHER :)
         Q = (1+Wp*P)*(Wa*Sa*tau_a^2 + We*tau_e^2 + Winc*tau_inc^2 + Wape*tau_ape^2 + Wlam*tau_lam^2)
         ###################################################################################################################################################
-        @infiltrate false
+        @infiltrate true
         return Q
 end
 
@@ -258,6 +261,7 @@ function oedotnn(a, e, inc, ape, lam, tru, nustar_oe, sig_oe, eps_oe, tru_E, f0,
     ustar = @SVector [alphastar; betastar]  # elementwise optimal control (EOC)
     astar_hill = aSRP(ustar, sc, eph, tru_E) # SRP accel. evaluated at EOC
     oedotnn = sig_oe*eps_oe'*f0 - pvec'*astar_hill # positive denominator of best-case ttg for A
+    @infiltrate
     return oedotnn
 end
 

@@ -84,7 +84,7 @@ function aSRP_orbitFrame(spacecraftState, u, sc::basicSolarSail, trueAnom_earth,
     inc = spacecraftState[3]; 
     argPer = spacecraftState[4];
     trueAnom = spacecraftState[6];
-    a_S = aSRP(u, sc, eph, trueAnom_earth)
+    a_S = aSRP(u, sc, eph, trueAnom_earth) # hill frame SRP
 
     # Now, create rotation matrix from sun frame to orbit frame
     # R_S_0 = R3(trueAnom + argPer)*R1(inc)*R3(lambda)

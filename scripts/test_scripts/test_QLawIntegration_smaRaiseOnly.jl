@@ -11,7 +11,7 @@ furnsh("de440.bsp")
 # Simulation time setup:
 date = "2023-01-01T12:30:00" 
 startTime = utc2et(date)  # start date in seconds past j2000
-simTime = 150*86400 # amount of time [s] to simulate for
+simTime = 126.55*86400 # amount of time [s] to simulate for
 endTime = startTime+simTime
 
 # QLaw Parameter setup
@@ -20,7 +20,7 @@ sc = basicSolarSail()
 X0 = [9222.7; 0.20; 0.573*pi/180; 0.00; 90; 0.0]  # COE initial conditions [a, e, i, argPer, RAAN, trueAnom]
 XT = [15000.0, 0.75, 0.01*pi/180, 270.0*pi/180, 90*pi/180] # Targets # note that targets has 5 elements, while X0 has 6
 oetols = [100, 0.001, 0.01, 0.01, 0.01]
-Woe = [1.0, 0.0, 0.0, 0.0, 0.0]
+Woe = [1.0, 1.0, 0.0, 0.0, 0.0]
 params = QLawParams(
     sc, 
     eph, 
@@ -50,7 +50,7 @@ prob = ODEProblem(QLawEOM!, X0, tspan, params, abstol=abstol, reltol=reltol)
     params.Woe[5]*abs(acos(cos(u[5] - params.oet[5]))) - params.oeTols[5]
 ]) <= 0 
 =#
-condition(u, t, integrator) = u[1] >= 12500
+condition(u, t, integrator) = u[1] >= 13500
 affect!(integrator) = terminate!(integrator)
 cb = DiscreteCallback(condition, affect!)
 sol = solve(prob,  callback=cb, saveat=60)
