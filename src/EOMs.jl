@@ -254,6 +254,8 @@ function QLawEOM!(dx, x, params::QLawParams, t)
     targError           = @SVector [aerr, eerr, ierr, ωerr, λerr]
     if maximum(targError) <= 0
         @infiltrate
+        alphastar = pi/2 # zero out acceleration
+        betastar = 0
     end
 
 
@@ -277,4 +279,29 @@ function QLawEOM!(dx, x, params::QLawParams, t)
     end
     dx[1:6] .= f0 + F*(a_SRP_O); 
     @infiltrate false # this is a good point for debugging, set false->true to turn on breakpoint
+end
+
+"""
+callback_function_error_check: function to be called when creating the callback condition
+INPUTS:
+    u: state passed in by condition function
+    t: time passed in by condition functiom
+    params: QLaw Params containing the weights and tolerances
+OUTPUTS:
+    returns true to terminate integration
+    returns false to continue integration
+"""
+function callback_function_error_check(x, t, params::QLawParams)
+    aerr                = params.Woe[1]*abs(x[1] - params.oet[1]) - params.oeTols[1]
+    eerr                = params.Woe[2]*abs(x[2] - params.oet[2]) - params.oeTols[2]
+    ierr                = params.Woe[3]*abs(x[3] - params.oet[3]) - params.oeTols[3]
+    ωerr                = params.Woe[4]*abs(acos(cos(x[4] - params.oet[4]))) - params.oeTols[4]
+    λerr                = params.Woe[5]*abs(acos(cos(x[5] - params.oet[5]))) - params.oeTols[5]
+    targError           = @SVector [aerr, eerr, ierr, ωerr, λerr]
+    if maximum(targError) <= 0
+        ret = true
+    else 
+        ret = false
+    end
+    return ret
 end
