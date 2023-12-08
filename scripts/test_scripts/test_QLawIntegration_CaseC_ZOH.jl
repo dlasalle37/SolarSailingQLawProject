@@ -2,6 +2,7 @@ using DrWatson
 @quickactivate "SolarSailingQLawProject"
 include(srcdir("Includes.jl"))
 using DelimitedFiles
+import GeometryBasics as GB
 import GLMakie as GM
 
 ## SPICE SETUP
@@ -12,7 +13,7 @@ furnsh("de440.bsp")
 # Simulation time setup:
 date = "2023-01-01T12:30:00" 
 startTime = utc2et(date)  # start date in seconds past j2000
-simTime = 100.0*24*3600 # amount of time [s] to simulate for
+simTime = 45.0*24*3600 # amount of time [s] to simulate for
 endTime = startTime+simTime
 
 # QLaw Parameter setup
@@ -31,7 +32,7 @@ params = QLawParams(
     Woe=Woe,
     rp_min=6578.0,
     a_esc=1.0E5,
-    max_sim_time = 20.0*86400,
+    max_sim_time = simTime,
     step_size = 60.0,
     writeData=true,
     kimp=100
@@ -55,9 +56,13 @@ for row in axes(kep, 1)
     cart[row,4:6] .= v
 end
 
+#Pull starting, ending points
+startPoint = cart[1, 1:3]
+endPoint = cart[end, 1:3]
+
 # Plot 3d figure
 fig = GM.Figure(;
-    size = (1920,1080),
+    size = (1920,1080)
 )
 
 ax = GM.Axis3(
@@ -66,9 +71,23 @@ ax = GM.Axis3(
     xlabel = "x [km]", 
     ylabel = "y [km]", 
     zlabel = "z [km]",
+    title = "Apoapsis-Raising Transfer computed with QLaw"
 )
 
-GM.lines!(ax, cart[:,1], cart[:,2], cart[:,3], color=:blue, linewidth=0.5)
+lin = GM.lines!(ax, cart[:,1], cart[:,2], cart[:,3], color=:blue, linewidth=0.5)
 
+# Plot start/end points
+sP = GM.scatter!(ax, startPoint[1], startPoint[2], startPoint[3], markersize=10.0, color=:black)
+eP = GM.scatter!(ax, endPoint[1], endPoint[2], endPoint[3], markersize=10.0, color=:red)
+
+# Create and add a sphere to represent earth
+sphere = Sphere(Point3f(0), 6378.0)
+spheremesh = GB.mesh(Tesselation(sphere, 64))
+sph = GM.mesh!(ax, spheremesh; color=(:blue))
+
+#Create legend
+GM.Legend(fig[1, 2], [lin, sP, eP], ["Satellite Trajectory", "Starting Point", "Ending Point"])
+
+    # Unload kernels
 unload("naif0012.tls")
 unload("de440.bsp")

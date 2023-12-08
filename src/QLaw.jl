@@ -38,9 +38,9 @@ function compute_control(x, params::QLawParams)
       To use ForwardDiff: uncomment first two lines, comment third line
       To use FiniteDiff: uncomment third line, comment first two lines  
     =#
-    #cfg = ForwardDiff.GradientConfig(calculate_Q, x) # GradientConfig
-    #dQdx = ForwardDiff.gradient(x->calculate_Q(x, params), x, cfg, Val{false}()) 
-    dQdx = FiniteDiff.finite_difference_gradient(x->calculate_Q(x, params), x) # using finite diff
+    cfg = ForwardDiff.GradientConfig(calculate_Q, x) # GradientConfig
+    dQdx = ForwardDiff.gradient(x->calculate_Q(x, params), x, cfg, Val{false}()) 
+    #dQdx = FiniteDiff.finite_difference_gradient(x->calculate_Q(x, params), x) # using finite diff
     
     Fx = F(a, e, inc, ape, tru, mu)
     R_H_O = hill_to_orbit_transform(inc, ape, lam, tru)  # rotation matrix for current states
@@ -261,7 +261,6 @@ function oedotnn(a, e, inc, ape, lam, tru, nustar_oe, sig_oe, eps_oe, tru_E, f0,
     ustar = @SVector [alphastar; betastar]  # elementwise optimal control (EOC)
     astar_hill = aSRP(ustar, sc, eph, tru_E) # SRP accel. evaluated at EOC
     oedotnn = sig_oe*eps_oe'*f0 - pvec'*astar_hill # positive denominator of best-case ttg for A
-    @infiltrate
     return oedotnn
 end
 
@@ -279,21 +278,21 @@ mu: gravitational parameter
 Outputs:
 F: 6x3 Matrix from gauss_variational_eqn
 """
-function F(a, e, inc, ape, tru, mu)
-
+function F(a, e, i, ω, θ, mu)
     p = a*(1-e^2)
     h = sqrt(mu*p)
-    r = p/(1*e*cos(tru))
+    r = p/(1+e*cos(θ))
 
-    out = @SArray [
-        2*a^2*e*sin(tru) 2*a^2*p/r 0;
-        p*sin(tru) (p+r)*cos(tru)+r*e 0;
-        0 0 r*cos(tru+ape);
-        -p*cos(tru)/e (p+r)*sin(tru)/e -r*sin(tru+ape)/tan(inc);
-        0 0 r*sin(tru+ape)/sin(inc);
-        p*cos(tru)/e -(p+r)*sin(tru)/e 0
+    F = 
+    @SArray [
+        2*a^2*e*sin(θ) 2*a^2*p/r 0;
+        p*sin(θ) (p+r)*cos(θ)+r*e 0;
+        0 0 r*cos(θ+ω);
+        -p*cos(θ)/e (p+r)*sin(θ)/e -r*sin(θ+ω)/tan(i);
+        0 0 r*sin(θ+ω)/sin(i);
+        p*cos(θ)/e -(p+r)*sin(θ)/e 0;
     ]
-    out = out*1/h
+    out = F*1/h
     return out
 end
 

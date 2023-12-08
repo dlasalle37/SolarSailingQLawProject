@@ -41,3 +41,5 @@ f0 = [0.0; 0.0; 0.0; 0.0; -2.0586466118771686e-7; 0.0007439937671808995]
 # Call function
 adotnn_test = oedotnn(a, e, inc, ape, lam, tru, nustar_a, sig_a, eps_a, tru_E, f0, params)
 println("Function Result: adotnn = $adotnn_test")
+
+# Check

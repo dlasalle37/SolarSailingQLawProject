@@ -11,7 +11,7 @@ furnsh("de440.bsp")
 # Simulation time setup:
 date = "2023-01-01T12:30:00" 
 startTime = utc2et(date)  # start date in seconds past j2000
-simTime = 20*86400 # amount of time [s] to simulate for
+simTime = 30*86400 # amount of time [s] to simulate for
 endTime = startTime+simTime
 
 # QLaw Parameter setup

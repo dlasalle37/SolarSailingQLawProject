@@ -1,3 +1,42 @@
+"""
+function augmented_keplerian_varaitions:
+    Stacked Gaussian variational equations for the orbital element set [a, e, i, ω, λ, θ] (defined below)
+INPUTS:
+    a: semi-major axis [km]
+    e: eccentricity
+    i: inclination
+    ω: argument of perigee [rad]
+    λ: ascencion of ascending node measured from the ir_hat vector (vector from sun to central body(eg. Earth) direction) [rad]
+    θ: true anomaly [rad]
+    θ_dot_body: ballistic evolution term of central body (such as earth) on its heliocentric orbit [rad/s]
+    mu: gravitational parameter of central body [km^3/s^2]
+OUTPUTS:
+        f0: 6x1 ballistic evolution vector 
+        F: 6x3 Variational matrix to be multiplied with an acceleration (3x1) in the sc-centered orbit frame
+"""
+function augmented_keplerian_varaitions(a, e, i, ω, λ, θ, θ_dot_body, mu)
+
+    p = a*(1-e^2)  # s/c semi-latus [km]
+    r = p/(1+e*cos(θ)) # s/c radial distance from earth [km]
+    h = sqrt(mu*p)  # s/c specific angular momentum [km^2/s]
+    θ_dot = sqrt(mu/a^3)*(1+e*cos(θ))^2 / (1-e^2)^(3/2)
+    f0 = @SVector [0;0;0;0; -θ_dot_body; θ_dot]
+    F = 
+    @SArray [
+        2*a^2*e*sin(θ) 2*a^2*p/r 0;
+        p*sin(θ) (p+r)*cos(θ)+r*e 0;
+        0 0 r*cos(θ+ω);
+        -p*cos(θ)/e (p+r)*sin(θ)/e -r*sin(θ+ω)/tan(i);
+        0 0 r*sin(θ+ω)/sin(i);
+        p*cos(θ)/e -(p+r)*sin(θ)/e 0;
+    ]
+    F = F*1/h 
+
+    return f0, F
+end
+"""
+
+"""
 function solarSailEOM_cartesian!(dx, x, p, t)
     #Unpack Parameters and current step values
         # paramter set p is organized as [mu, ::basicSolarSail, ::TwoBodyEphemeride]
@@ -56,10 +95,18 @@ function aSRP(u, sc::basicSolarSail, eph::TwoBodyEphemeride, trueAnom_Earth)
     d = distance_to_sun(eph, trueAnom_Earth)
     C1 = sc.C[1]; C2 = sc.C[2]; C3 = sc.C[3]
     G0 = 1.02E14 # solar flux constant at earth [kgkm/s^2]
-    a1 = C1*(cos(α))^2+C2*cos(α)+C3  # sun frame r-direction, not scaled
+    a1 = C1*cos(α)^2+C2*cos(α)+C3  # sun frame r-direction, not scaled
     a2 = -(C1*cos(α)+C2)*sin(α)sin(β)  # sun frame theta-direction, not scaled
     a3 = -(C1*cos(α)+C2)*sin(α)cos(β)  # sun frame h-direction, not scaled
     a_SRP = cos(α)*sc.areaParam * G0/d^2 * @SVector [a1; a2; a3]  # aSRP expressed in sun frame
+    #=
+    a = α; b = β
+    a_SRP = sc.areaParam*G0/d^2 * cos(a)*[
+        C1*cos(a)^2+C2*cos(a) + C3;
+        -((C1*cos(a)+C2)*sin(a)*sin(b));
+        -((C1*cos(a)+C2)*sin(a)*cos(b))
+    ]=#
+
     return a_SRP
 end
 
@@ -107,12 +154,11 @@ function gauss_variational_eqn!(dx, x, params::QLawParams, t)
     OUTPUTS:
     =#
     # unpack parameters:
-    mu_sun = 1.327E11
+    mu_sun = params.mu_sun
     mu = params.mu
     sc = params.sc
     u = @SVector [params.alpha; params.beta]  # control inputs, alpha and beta
     eph = params.eph  # ephemeride (contains start date)
-    epoch = eph.t0 #start date of propagation , et
     method = sc.method
 
     #Unpack state vector:
@@ -143,27 +189,19 @@ function gauss_variational_eqn!(dx, x, params::QLawParams, t)
     h = sqrt(mu*p)  # s/c specific angular momentum [km^2/s]
 
     #Oguri formulation
-    nuDot = sqrt(mu/a^3)*(1+e*cos(trueAnom))^2 / (1-e^2)^(3/2) 
+    nuDot = sqrt(mu/a^3)*(1+e*cos(trueAnom))^2 / (1-e^2)^(3/2)
 
     
     ae = eph.semiMajorAxis
     ee = eph.eccentricity
     nuDot_earth = sqrt(mu_sun/ae^3)*(1+ee*cos(nue))^2 / (1-ee^2)^(3/2) 
     
-    if method == :Kep
+    if method == :Kep # if the OE set is keplerian
         f0 = [0;0;0;0;0;nuDot]
     else
         f0 = [0;0;0;0; -nuDot_earth; nuDot]
     end
-    F = 
-    1/h*[
-        2*a^2*e*sin(trueAnom) 2*a^2*p/r 0;
-        p*sin(trueAnom) (p+r)*cos(trueAnom)+r*e 0;
-        0 0 r*cos(trueAnom+argPer);
-        -p*cos(trueAnom)/e (p+r)*sin(trueAnom)/e -r*sin(trueAnom+argPer)/tan(inc);
-        0 0 r*sin(trueAnom+argPer)/sin(inc);
-        p*cos(trueAnom)/e -(p+r)*sin(trueAnom)/e 0;
-    ]
+    ~, F = augmented_keplerian_varaitions(a, e, inc, argPer, lambda, trueAnom, nuDot_earth, mu)
 
     dx[1:6] .= f0 + F*(a_SRP_O); 
 
@@ -187,9 +225,9 @@ function QLawEOM!(dx, x, params::QLawParams, t)
     a = x[1]
     e = x[2]
     inc = x[3]
-    argPer = x[4]
-    lambda = x[5]
-    trueAnom = x[6]
+    ape = x[4]
+    lam = x[5]
+    tru = x[6]
 
     #Check for NaN/Infs in time
     if isnan(t) || isinf(t)
@@ -222,24 +260,11 @@ function QLawEOM!(dx, x, params::QLawParams, t)
     u = @SVector [alphastar; betastar]
     ## Compute derivatives based on control:
     a_SRP_O = aSRP_orbitFrame(x, u, sc, nue, eph);  # SRP acceleration resolved into the O (orbit) frame where O{s/c, er_hat, eθ_hat, eh_hat}
-    p = a*(1-e^2)  # s/c semi-latus [km]
-    r = p/(1+e*cos(trueAnom)) # s/c radial distance from earth [km]
-    h = sqrt(mu*p)  # s/c specific angular momentum [km^2/s]
-    nuDot = sqrt(mu/a^3)*(1+e*cos(trueAnom))^2 / (1-e^2)^(3/2) # s/c ballistic evolution
     ae = eph.semiMajorAxis
     ee = eph.eccentricity
     mu_sun = params.mu_sun
     nuDot_earth = sqrt(mu_sun/ae^3)*(1+ee*cos(nue))^2 / (1-ee^2)^(3/2) 
-    f0 = [0;0;0;0; -nuDot_earth; nuDot]
-    F = 
-    1/h*[
-        2*a^2*e*sin(trueAnom) 2*a^2*p/r 0;
-        p*sin(trueAnom) (p+r)*cos(trueAnom)+r*e 0;
-        0 0 r*cos(trueAnom+argPer);
-        -p*cos(trueAnom)/e (p+r)*sin(trueAnom)/e -r*sin(trueAnom+argPer)/tan(inc);
-        0 0 r*sin(trueAnom+argPer)/sin(inc);
-        p*cos(trueAnom)/e -(p+r)*sin(trueAnom)/e 0;
-    ]
+    f0, F = augmented_keplerian_varaitions(a, e, inc, ape, lam, tru, nuDot_earth, mu)
 
     
     # Check Lyapunov function [dQdt should be negative]
