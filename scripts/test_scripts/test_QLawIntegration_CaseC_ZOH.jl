@@ -35,7 +35,7 @@ params = QLawParams(
     max_sim_time = simTime,
     step_size = 60.0,
     writeData=true,
-    kimp=100
+    kimp=1000
     )
 finalOE, exitcode = QLawIntegrator(params)
 
@@ -47,6 +47,10 @@ println(exitcode)
 # ===== Plotting
 # First read the data
 kep = readdlm(datadir("kep.txt"), '\t', '\n'; header=false)
+sail_angles = readdlm(datadir("angles.txt"), '\t', '\n'; header=false)
+alpha = sail_angles[:,1]*180/pi #convert to deg
+beta = sail_angles[:,2]*180/pi #convert to deg
+t = collect(params.step_size:params.step_size:params.current_time-params.eph.t0)
 
 # Convert to cartesian
 cart = Matrix{Float64}(undef, size(kep))
@@ -81,13 +85,69 @@ sP = GM.scatter!(ax, startPoint[1], startPoint[2], startPoint[3], markersize=10.
 eP = GM.scatter!(ax, endPoint[1], endPoint[2], endPoint[3], markersize=10.0, color=:red)
 
 # Create and add a sphere to represent earth
-sphere = Sphere(Point3f(0), 6378.0)
-spheremesh = GB.mesh(Tesselation(sphere, 64))
+sphere = GB.Sphere(GB.Point3f(0), 6378.0)
+spheremesh = GB.mesh(GB.Tesselation(sphere, 64))
 sph = GM.mesh!(ax, spheremesh; color=(:blue))
 
 #Create legend
 GM.Legend(fig[1, 2], [lin, sP, eP], ["Satellite Trajectory", "Starting Point", "Ending Point"])
 
-    # Unload kernels
+# Plot steering Law
+fig2 = GM.Figure()
+ax2 = GM.Axis(
+    fig2[1,1];
+    xlabel = "Time[days]",
+    ylabel = "Angle [Deg]",
+    title = "Steering Angle [alpha]"
+    )
+alp = GM.lines!(ax2, t/86400, alpha)
+ax3 = GM.Axis(
+    fig2[2,1];
+    xlabel = "Time[days]",
+    ylabel = "Angle [Deg]",
+    title = "Steering Angle [beta]"
+    )
+bet = GM.lines!(ax3, t/86400, beta)
+
+#plot oe histories
+fig3 = GM.Figure(title="Orbital Element Histories")
+axa = GM.Axis(
+    fig3[1,1],
+    xlabel="Time[days]",
+    ylabel="km",
+    title="Semi-Major Axis",
+)
+axe = GM.Axis(
+    fig3[2,1],
+    xlabel="Time[days]",
+    title="Eccentricity",
+)
+axi = GM.Axis(
+    fig3[1,2],
+    xlabel="Time[days]",
+    ylabel="Angle[Deg]",
+    title="Inclination",
+)
+axape = GM.Axis(
+    fig3[2,2],
+    xlabel="Time[days]",
+    ylabel="Angle[Deg]",
+    title="Arg.Perigee",
+)
+axlam = GM.Axis(
+    fig3[3,1],
+    xlabel="Time[days]",
+    ylabel="Angle[Deg]",
+    title="Lambda",
+)
+GM.lines!(axa, t/86400, kep[:,1])
+GM.lines!(axe, t/86400, kep[:,2])
+GM.lines!(axi, t/86400, kep[:,3]*180/pi)
+GM.lines!(axape, t/86400, kep[:,4]*180/pi)
+GM.lines!(axlam, t/86400, kep[:,1]*180/pi)
+
+#fig1, fig2, fig3
+
+# Unload kernels
 unload("naif0012.tls")
 unload("de440.bsp")
