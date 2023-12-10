@@ -253,7 +253,7 @@ function QLawEOM!(dx, x, params::QLawParams, t)
     λerr                = params.Woe[5]*abs(acos(cos(x[5] - params.oet[5]))) - params.oeTols[5]
     targError           = @SVector [aerr, eerr, ierr, ωerr, λerr]
     if maximum(targError) <= 0
-        @infiltrate
+        @infiltrate false
         alphastar = pi/2 # zero out acceleration
         betastar = 0
     end

@@ -200,7 +200,7 @@ function calculate_Q(x, params)
         else # only calculate this if Wape != 0
             # This one is done with a brute force method:
             nu = range(0, 2*pi, 200)  # 200 evenly spaced points from 0 to 2*pi
-            mappedvals = @MArray zeros(length(nu)) # initialize solution
+            mappedvals = Vector{Any}(undef, length(nu)) # initialize solution
             for i in range(1, length(nu))
                 mappedvals[i] = sig_ape*p/(h*(1+e*cos(nu[i]))) * (1/e * sin(nu[i])*(-se*sin(nu[i])+sp*cos(nu[i])) - sin(nu[i]+ape)/tan(inc) * sh)
             end
@@ -224,7 +224,7 @@ function calculate_Q(x, params)
         # PUTTING Q TOGETHER :)
         Q = (1+Wp*P)*(Wa*Sa*tau_a^2 + We*tau_e^2 + Winc*tau_inc^2 + Wape*tau_ape^2 + Wlam*tau_lam^2)
         ###################################################################################################################################################
-        @infiltrate true
+        @infiltrate false
         return Q
 end
 
