@@ -305,3 +305,21 @@ function callback_function_error_check(x, t, params::QLawParams)
     end
     return ret
 end
+
+"""
+function two_body_eom!: 2Body equations of motion
+    Notes: Only used for plotting initial/target hill_to_orbit_transform
+    INPUTS:
+        dx: for inplace-form of diffeq
+        x: anonymous state vector:
+        mu: central body grav. parameter
+        t: anonymous time variable
+"""
+function two_body_eom!(dx, x, mu, t)
+    rvec = x[1:3]
+    vvec = x[4:6]
+
+    r = norm(rvec)
+
+    dx[1:6] .= [vvec; -mu/r^3 * rvec]
+end
