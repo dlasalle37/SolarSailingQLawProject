@@ -56,7 +56,8 @@ t = collect(params.step_size:params.step_size:params.current_time-params.eph.t0)
 # Convert to cartesian
 cart = Matrix{Float64}(undef, size(kep))
 for row in axes(kep, 1)
-    r, v = coe2rv(kep[row,1], kep[row,2], kep[row,3], kep[row,4], kep[row,5], kep[row,6], 398600.4418)
+    local nue = get_heliocentric_position(eph, eph.t0+t[row]) # get earth pos @ each time for conversion to keplerian elemetns
+    r, v = coe2rv(kep[row,1], kep[row,2], kep[row,3], kep[row,4], kep[row,5]+nue, kep[row,6], 398600.4418)
     cart[row,1:3] .= r
     cart[row,4:6] .= v
 end
@@ -87,20 +88,22 @@ eP = GM.scatter!(ax, endPoint[1], endPoint[2], endPoint[3], markersize=10.0, col
 
 # Create and plot initial/final orbits 
 #Initial:
+abstol = 1.0e-6
+reltol=1.0e-6
 mu = params.mu
 X0 = cart[1,:]
 a0 = kep[1,1]
 period_initial = 2*pi/sqrt(mu/a0^3)
-prob = ODEProblem(two_body_eom!, X0, (0, period_initial), mu, saveat=60)
+prob = ODEProblem(two_body_eom!, X0, (0, 2*period_initial), mu, saveat=60, abstol=abstol, reltol=reltol)
 sol2 = solve(prob)
 orb0 = reduce(hcat, sol2.u)
 lin2 = GM.lines!(ax, orb0[1,:], orb0[2,:], orb0[3,:], color=:limegreen, linewidth=2.0)
     
 #Final:
 af = kep[end, 1]
-XF = cart[end, :]
 period_final = 2*pi/sqrt(mu/af^3)
-prob = ODEProblem(two_body_eom!, XF, (0, period_final), mu, saveat=60)
+XF = cart[end, :]
+prob = ODEProblem(two_body_eom!, XF, (0, period_final), mu, saveat=60, abstol=abstol, reltol=reltol)
 sol3 = solve(prob)
 orbF = reduce(hcat, sol3.u)
 lin3 = GM.lines!(ax, orbF[1,:], orbF[2,:], orbF[3,:], color=:red, linewidth=2.0)
@@ -166,7 +169,7 @@ GM.lines!(axa, t/86400, kep[:,1])
 GM.lines!(axe, t/86400, kep[:,2])
 GM.lines!(axi, t/86400, kep[:,3]*180/pi)
 GM.lines!(axape, t/86400, kep[:,4]*180/pi)
-GM.lines!(axlam, t/86400, kep[:,1]*180/pi)
+GM.lines!(axlam, t/86400, kep[:,5])
 
 #fig1, fig2, fig3
 

@@ -63,7 +63,8 @@ t = sol.t.-params.eph.t0 # shift time back to start at zero
 # Convert to cartesian
 cart = Matrix{Float64}(undef, size(kep))
 for row in axes(kep, 1)
-    r, v = coe2rv(kep[row,1], kep[row,2], kep[row,3], kep[row,4], kep[row,5], kep[row,6], 398600.4418)
+    local nue = get_heliocentric_position(eph, eph.t0+t[row]) # get earth pos @ each time for conversion to keplerian elemetns
+    r, v = coe2rv(kep[row,1], kep[row,2], kep[row,3], kep[row,4], kep[row,5]+nue, kep[row,6], 398600.4418)
     cart[row,1:3] .= r
     cart[row,4:6] .= v
 end
@@ -74,7 +75,6 @@ endPoint = cart[end, 1:3]
 
 # Plot 3d figure
 fig = GM.Figure(;
-    size = (1920,1080)
 )
 
 ax = GM.Axis3(
@@ -156,7 +156,7 @@ GM.lines!(axa, t/86400, kep[:,1])
 GM.lines!(axe, t/86400, kep[:,2])
 GM.lines!(axi, t/86400, kep[:,3]*180/pi)
 GM.lines!(axape, t/86400, kep[:,4]*180/pi)
-GM.lines!(axlam, t/86400, kep[:,1]*180/pi)
+GM.lines!(axlam, t/86400, kep[:,5])
 
 
 # Unload Kernels
