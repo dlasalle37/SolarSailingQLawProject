@@ -26,6 +26,7 @@ function compute_control(x, params::QLawParams)
     # Keep inc, e away from zero
     if e<= 1.0E-4
         e = 1.0E-4
+        x[2] = e
     end
     if inc <= 1.0E-4
         inc = 1.0E-4
@@ -38,6 +39,9 @@ function compute_control(x, params::QLawParams)
       To use ForwardDiff: uncomment first two lines, comment third line
       To use FiniteDiff: uncomment third line, comment first two lines  
     =#
+    if x[1] < 0 || x[2] > 1 || x[2] < 0
+        @infiltrate
+    end
     cfg = ForwardDiff.GradientConfig(calculate_Q, x) # GradientConfig
     dQdx = ForwardDiff.gradient(x->calculate_Q(x, params), x, cfg, Val{false}()) 
     #dQdx = FiniteDiff.finite_difference_gradient(x->calculate_Q(x, params), x) # using finite diff

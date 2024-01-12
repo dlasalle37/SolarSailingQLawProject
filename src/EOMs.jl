@@ -303,6 +303,9 @@ function callback_function_error_check(x, t, params::QLawParams)
     else 
         ret = false
     end
+    if x[2] > 1 || x[2] < 0
+        ret = true # terminate if eccentricity is out of bounds
+    end
     return ret
 end
 
