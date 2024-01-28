@@ -16,6 +16,10 @@ OUTPUTS:
 """
 function augmented_keplerian_varaitions(a, e, i, ω, λ, θ, θ_dot_body, mu)
 
+    if e <= 1.0E-4
+        @infiltrate
+    end
+
     p = a*(1-e^2)  # s/c semi-latus [km]
     r = p/(1+e*cos(θ)) # s/c radial distance from earth [km]
     h = sqrt(mu*p)  # s/c specific angular momentum [km^2/s]
@@ -228,6 +232,21 @@ function QLawEOM!(dx, x, params::QLawParams, t)
     ape = x[4]
     lam = x[5]
     tru = x[6]
+
+    if a < 0 || e > 1
+        error("Orbital elements suggest orbit may be hyperbolic.")
+    end
+
+    if e <= 1.0E-4
+        e = 1.0E-4
+    end
+    if inc <= 1.0E-4
+        inc = 1.0E-4
+    end
+
+    # Re-set x, just in case anything changed
+    x = [a, e, inc, ape, lam, tru]
+
 
     #Check for NaN/Infs in time
     if isnan(t) || isinf(t)

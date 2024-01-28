@@ -26,7 +26,7 @@ function compute_control(x, params::QLawParams)
     # Keep inc, e away from zero
     if e<= 1.0E-4
         e = 1.0E-4
-        x[2] = e
+        #x[2] = e
     end
     if inc <= 1.0E-4
         inc = 1.0E-4

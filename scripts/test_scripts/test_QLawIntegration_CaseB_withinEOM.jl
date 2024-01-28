@@ -22,7 +22,7 @@ nue = get_heliocentric_position(eph, eph.t0)
 X0 = [9222.7; 0.20; 0.573*pi/180; 0.00; 2.0354056994857928; 0.0]  # COE initial conditions [a, e, i, argPer, RAAN, trueAnom]
 XT = [42164.0, 0.10, 10.0*pi/180, 270.0*pi/180, 90.0*pi/180] # Targets # note that targets has 5 elements, while X0 has 6
 oetols = [10, 0.001, 0.01, 0.01, 0.01]
-Woe = [150.0, 1.0, 1.0, 0.0, 0.0]
+Woe = [1.0, 1.0, 1.0, 0.0, 0.0]
 params = QLawParams(
     sc, 
     eph, 
