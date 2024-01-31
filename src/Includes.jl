@@ -12,6 +12,7 @@ using Statistics
 using LinearAlgebra
 using DelimitedFiles
 using Infiltrator
+using DiffEqCallbacks
 
 #Includes
 include("constants.jl")

@@ -22,15 +22,15 @@ function compute_control(x, params::QLawParams)
     C2 = sc.C[2]
     C3 = sc.C[3]
 
-    
-    # Keep inc, e away from zero
+ 
+    #= Keep inc, e away from zero
     if e<= 1.0E-4
         e = 1.0E-4
         #x[2] = e
     end
     if inc <= 1.0E-4
         inc = 1.0E-4
-    end
+    end=#
 
     # DQDX Calculation:
     
@@ -115,7 +115,7 @@ function calculate_Q(x, params)
         ## Create Q
         # Some initial terms
         p = a*(1-e^2) # semi-latus rectum
-        if mu*p <0
+        if mu*p <0 # about to error out
             @infiltrate
         end
         h = sqrt(mu*p)

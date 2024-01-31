@@ -16,9 +16,6 @@ OUTPUTS:
 """
 function augmented_keplerian_varaitions(a, e, i, ω, λ, θ, θ_dot_body, mu)
 
-    if e <= 1.0E-4
-        @infiltrate
-    end
 
     p = a*(1-e^2)  # s/c semi-latus [km]
     r = p/(1+e*cos(θ)) # s/c radial distance from earth [km]
@@ -233,11 +230,8 @@ function QLawEOM!(dx, x, params::QLawParams, t)
     lam = x[5]
     tru = x[6]
 
-    if a < 0 || e > 1
-        error("Orbital elements suggest orbit may be hyperbolic.")
-    end
-
     if e <= 1.0E-4
+        @infiltrate
         e = 1.0E-4
     end
     if inc <= 1.0E-4
@@ -261,26 +255,16 @@ function QLawEOM!(dx, x, params::QLawParams, t)
 
     # Compute Control:
     alphastar, betastar, dQdx = compute_control(x, params)
-
-    # Check for state convergence
-    # Stopping criteria
-    # Compute targeting error
-    aerr                = params.Woe[1]*abs(x[1] - params.oet[1]) - params.oeTols[1]
-    eerr                = params.Woe[2]*abs(x[2] - params.oet[2]) - params.oeTols[2]
-    ierr                = params.Woe[3]*abs(x[3] - params.oet[3]) - params.oeTols[3]
-    ωerr                = params.Woe[4]*abs(acos(cos(x[4] - params.oet[4]))) - params.oeTols[4]
-    λerr                = params.Woe[5]*abs(acos(cos(x[5] - params.oet[5]))) - params.oeTols[5]
-    targError           = @SVector [aerr, eerr, ierr, ωerr, λerr]
-    if maximum(targError) <= 0
-        @infiltrate false
-        alphastar = pi/2 # zero out acceleration
-        betastar = 0
-    end
-
-
     u = @SVector [alphastar; betastar]
+
     ## Compute derivatives based on control:
     a_SRP_O = aSRP_orbitFrame(x, u, sc, nue, eph);  # SRP acceleration resolved into the O (orbit) frame where O{s/c, er_hat, eθ_hat, eh_hat}
+    
+    # Error Check, DELETE later. Checking if any components of SRP are > 1E^-3 km/s^2
+    if any(x->x>1.0E-3, a_SRP_O)
+        @infiltrate
+    end
+    
     ae = eph.semiMajorAxis
     ee = eph.eccentricity
     mu_sun = params.mu_sun
@@ -290,14 +274,19 @@ function QLawEOM!(dx, x, params::QLawParams, t)
     
     # Check Lyapunov function [dQdt should be negative]
     dQdt = dQdx'*(f0 + F*(a_SRP_O))
-    if  dQdt > 0.0
+    if  dQdt > 0.0 # If dQdt> 0, it is implied that there is no control to decrease error
         @infiltrate false # for debugging
         alphastar = pi/2 # if dQdt>0, zero out SRP acceleration from the sail by setting alpha=90deg
         a_SRP_O = aSRP_orbitFrame(x, [alphastar; betastar], sc, nue, eph);
         #error("Lyapunov condition (dQdt<0) not met at t=$t. dQdt at this time: $dQdt")
     end
+
     dx[1:6] .= f0 + F*(a_SRP_O); 
-    @infiltrate false # this is a good point for debugging, set false->true to turn on breakpoint
+    edot = dx[2]
+
+    if (t-eph.t0)/86400 >= 135.0
+        @infiltrate false# this is a good point for debugging, set false->true to turn on breakpoint
+    end
 end
 
 """
@@ -328,6 +317,28 @@ function callback_function_error_check(x, t, params::QLawParams)
     return ret
 end
 
+"""
+continuous_callback_errorcheck: function to be called when creating a continuous callback
+INPUTS:
+    u: state passed in by condition function
+    t: time passed in by condition functiom
+    params: QLaw Params containing the weights and tolerances
+OUTPUTS:
+    ret: maximum of errors, when this reaches zero, the solution has converged
+"""
+function continuous_callback_errorcheck(x, t, params::QLawParams)
+    aerr                = params.Woe[1]*abs(x[1] - params.oet[1]) - params.oeTols[1]
+    eerr                = params.Woe[2]*abs(x[2] - params.oet[2]) - params.oeTols[2]
+    ierr                = params.Woe[3]*abs(x[3] - params.oet[3]) - params.oeTols[3]
+    ωerr                = params.Woe[4]*abs(acos(cos(x[4] - params.oet[4]))) - params.oeTols[4]
+    λerr                = params.Woe[5]*abs(acos(cos(x[5] - params.oet[5]))) - params.oeTols[5]
+    targError           = @SVector [aerr, eerr, ierr, ωerr, λerr]
+
+    ret = maximum(targError)
+
+    return ret
+
+end
 """
 function two_body_eom!: 2Body equations of motion
     Notes: Only used for plotting initial/target hill_to_orbit_transform

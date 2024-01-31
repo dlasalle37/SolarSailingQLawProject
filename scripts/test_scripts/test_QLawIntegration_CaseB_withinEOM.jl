@@ -19,7 +19,7 @@ endTime = startTime+simTime
 eph = twoBodyEarthEphemeride(startTime, endTime)  # create the earth ephemeride
 sc = basicSolarSail()
 nue = get_heliocentric_position(eph, eph.t0)
-X0 = [9222.7; 0.20; 0.573*pi/180; 0.00; 2.0354056994857928; 0.0]  # COE initial conditions [a, e, i, argPer, RAAN, trueAnom]
+X0 = [9222.7; 0.20; 0.573*pi/180; 0.00; 2.0354056994857928-nue; 0.0]  # COE initial conditions [a, e, i, argPer, lambda, trueAnom]
 XT = [42164.0, 0.10, 10.0*pi/180, 270.0*pi/180, 90.0*pi/180] # Targets # note that targets has 5 elements, while X0 has 6
 oetols = [10, 0.001, 0.01, 0.01, 0.01]
 Woe = [1.0, 1.0, 1.0, 0.0, 0.0]
@@ -38,14 +38,25 @@ params = QLawParams(
     kimp=100
     )
 
+# ======= Integrator Setup
 abstol = 1.0E-6
 reltol = 1.0E-6
 tspan = (startTime, endTime)
 prob = ODEProblem(QLawEOM!, X0, tspan, params, abstol=abstol, reltol=reltol)
-condition(u, t, integrator) = callback_function_error_check(u, t, params)
+
+# ======= Callback Setups for Integrator:
+# ======= To use a Discrete callback, comment in this block
+#=condition(u, t, integrator) = callback_function_error_check(u, t, params)
 affect!(integrator) = terminate!(integrator)
-cb = DiscreteCallback(condition, affect!)
-sol = solve(prob,  saveat=60, callback=cb)
+cb = DiscreteCallback(condition, affect!)=#
+
+# ======= To use a Continuous callback, comment in this block
+condition(u, t, integrator) = continuous_callback_errorcheck(u, t, params)
+affect!(integrator) = terminate!(integrator)
+ccb = ContinuousCallback(condition, affect!)
+
+# ====== Run solve function to solve DE
+sol = solve(prob, AutoTsit5(Rosenbrock23()),  saveat=60, callback=cb) #isoutofdomain=(y,p,t)->any(x->x<0,y[2])
 
 print("End Values: ")
 println(sol.u[end])
@@ -62,8 +73,10 @@ t = sol.t.-params.eph.t0 # shift time back to start at zero
 
 # Convert to cartesian
 cart = Matrix{Float64}(undef, size(kep))
+ran = Vector{Float64}(undef, size(kep)[1])
 for row in axes(kep, 1)
     local nue = get_heliocentric_position(eph, eph.t0+t[row]) # get earth pos @ each time for conversion to keplerian elemetns
+    ran[row] = kep[row,5]+nue # save RAAN to its own variable to plot later
     r, v = coe2rv(kep[row,1], kep[row,2], kep[row,3], kep[row,4], kep[row,5]+nue, kep[row,6], 398600.4418)
     cart[row,1:3] .= r
     cart[row,4:6] .= v
@@ -152,11 +165,25 @@ axlam = GM.Axis(
     ylabel="Angle[Deg]",
     title="Lambda",
 )
+axtru = GM.Axis(
+    fig3[3,3],
+    xlabel="Time[days]",
+    ylabel="Angle[deg]",
+    title="True anom",
+)
+axRAN  = GM.Axis(
+    fig3[3,2],
+    xlabel="Time[days]",
+    ylabel="Angle[deg]",
+    title="RAAN",
+)
 GM.lines!(axa, t/86400, kep[:,1])
 GM.lines!(axe, t/86400, kep[:,2])
 GM.lines!(axi, t/86400, kep[:,3]*180/pi)
 GM.lines!(axape, t/86400, kep[:,4]*180/pi)
-GM.lines!(axlam, t/86400, kep[:,5])
+GM.lines!(axlam, t/86400, kep[:,5]*180/pi)
+GM.lines!(axRAN, t/86400, ran*180/pi)
+GM.lines!(axtru, t/86400, kep[:,6]*180/pi)
 
 
 # Unload Kernels
