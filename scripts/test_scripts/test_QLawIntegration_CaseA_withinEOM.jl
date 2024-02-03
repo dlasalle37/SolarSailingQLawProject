@@ -34,8 +34,8 @@ params = QLawParams(
     a_esc=1.0E5,
     max_sim_time = simTime,
     step_size = 60.0,
-    writeData=true,
-    kimp=100
+    kimp=100,
+    writeData=true
     )
 
 # ======= Integrator Setup
@@ -65,20 +65,27 @@ if params.writeData
     open(datadir("kep.txt"),   "w") do io; writedlm(io,  sol.u); end
 end
 
-# ===== Plotting
+# ===== Post-Processing and Plotting
 # First read the data
 kep = readdlm(datadir("kep.txt"), '\t', '\n'; header=false)
 t = sol.t.-params.eph.t0 # shift time back to start at zero
 
-# Convert to cartesian
+# Some Post-processing items
 cart = Matrix{Float64}(undef, size(kep))
 ran = Vector{Float64}(undef, size(kep)[1])
+angles = Matrix{Float64}(undef, (size(kep)[1], 2))
 for row in axes(kep, 1)
     local nue = get_heliocentric_position(eph, eph.t0+t[row]) # get earth pos @ each time for conversion to keplerian elemetns
     ran[row] = kep[row,5]+nue # save RAAN to its own variable to plot later
+
+    # Get cartesian Coords
     r, v = coe2rv(kep[row,1], kep[row,2], kep[row,3], kep[row,4], kep[row,5]+nue, kep[row,6], 398600.4418)
     cart[row,1:3] .= r
     cart[row,4:6] .= v
+
+    # Re-compute the sail angles
+    alpha, beta, dQdx = compute_control(kep[row,:], params)
+    angles[row,:] = [alpha, beta]
 end
 
 #Pull starting, ending points
@@ -132,6 +139,23 @@ sph = GM.mesh!(ax, spheremesh; color=(:blue))
     
 #Create legend
 GM.Legend(fig[1, 2], [lin, sP, eP, lin2, lin3], ["Satellite Trajectory", "Starting Point", "Ending Point", "Initial Orbit", "Final Orbit"])
+
+# Plot steering Law
+fig2 = GM.Figure()
+ax2 = GM.Axis(
+    fig2[1,1];
+    xlabel = "Time[days]",
+    ylabel = "Angle [Deg]",
+    title = "Steering Angle [alpha]"
+    )
+alp = GM.lines!(ax2, t/86400, angles[:,1]*180/pi)
+ax3 = GM.Axis(
+    fig2[2,1];
+    xlabel = "Time[days]",
+    ylabel = "Angle [Deg]",
+    title = "Steering Angle [beta]"
+    )
+bet = GM.lines!(ax3, t/86400, angles[:,2]*180/pi)
 
 #plot oe histories
 fig3 = GM.Figure(title="Orbital Element Histories")

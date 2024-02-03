@@ -247,9 +247,6 @@ function QLawEOM!(dx, x, params::QLawParams, t)
         error("Time is $t")
     end
 
-    # Update params current time
-    params.current_time = t # current time in ephemeris time [s]
-
     # Update Earth Position
     nue = get_heliocentric_position(eph, t)
 
@@ -282,7 +279,8 @@ function QLawEOM!(dx, x, params::QLawParams, t)
     end
 
     dx[1:6] .= f0 + F*(a_SRP_O); 
-    edot = dx[2]
+    # Update params current time after each integrator loop
+    params.current_time = t # current time in ephemeris time [s]
 
     if (t-eph.t0)/86400 >= 135.0
         @infiltrate false# this is a good point for debugging, set false->true to turn on breakpoint
