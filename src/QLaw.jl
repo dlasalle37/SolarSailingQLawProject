@@ -255,7 +255,7 @@ function oedotnn(a, e, inc, ape, lam, tru, nustar_oe, sig_oe, eps_oe, tru_E, f0,
     mu_sun = params.mu_sun
     eph = params.eph
     R_H_O_star = hill_to_orbit_transform(inc, ape, lam, nustar_oe)
-    Foe = F(a, e, inc, ape, nustar_oe, mu)
+    (~, Foe) = augmented_keplerian_varaitions(a, e, inc, ape, lam, nustar_oe, 0, mu) #arg. 5 is irrelevant since we ignore output 1
     pvec = -transpose(sig_oe*eps_oe'*Foe*R_H_O_star);
     py = pvec[2] 
     pz = pvec[3]
@@ -268,6 +268,52 @@ function oedotnn(a, e, inc, ape, lam, tru, nustar_oe, sig_oe, eps_oe, tru_E, f0,
     return oedotnn
 end
 
+"""
+calculate_alpha_star: Supplementary function to calculate the term alphastar_0
+Solar Sailing Q Law Full Derivation, Equation 20
+Inputs: 
+p: p_oe vector, calculated at an optimal true anomaly 
+"""
+function calculate_alpha_star(p, sc::basicSolarSail)
+    px = p[1] 
+    py = p[2] 
+    pz = p[3]
+    C1 = sc.C[1]
+    C2 = sc.C[2]
+    C3 = sc.C[3]
+
+    k = px/sqrt(py^2+pz^2)
+    αstar0 = atan(0.25*(-3*k+sqrt(8+9*k^2)))
+    Fstar = k*(3*C1*cos(αstar0)^2+2*C2*cos(αstar0)+C3)*sin(αstar0)-C1*cos(αstar0)*(1-3*sin(αstar0)^2)-C2*cos(2*αstar0)
+    Fstar_prime = k*(3*C1*(cos(αstar0)^3-2*cos(αstar0)*sin(αstar0)^2) + 2*C2*cos(2*αstar0)+C3*cos(αstar0)) - 
+        C1*sin(αstar0)*(2-9*cos(αstar0)^2) + 2*C2*sin(2*αstar0)
+    alphastar = αstar0 - Fstar/Fstar_prime
+
+    return alphastar
+end
+
+#=============== OLD
+"""
+This is a function for debugging
+    analytical partial for penalty wrt eccentricity
+"""
+function analytical_dPde(e, a, params::QLawParams)
+    kimp = params.kimp
+    Aimp = params.Aimp
+    rpmin = params.rp_min
+    dPde = kimp*a/rpmin * Aimp*exp(kimp * (1-a*(1-e)/rpmin))
+
+end
+
+"""
+use finitediff on this and compare to above
+"""
+function Pfun(e, a, params)
+    kimp = params.kimp
+    Aimp = params.Aimp
+    rpmin = params.rp_min
+    P = Aimp*exp(kimp * (1-a*(1-e)/rpmin))
+end
 
 """
 F: Supplementary function for repeated calls of F(xslow, nustar) as an intermediary step of calculate best-case time-to-go
@@ -300,49 +346,4 @@ function F(a, e, i, ω, θ, mu)
     return out
 end
 
-"""
-calculate_alpha_star: Supplementary function to calculate the term alphastar_0
-Solar Sailing Q Law Full Derivation, Equation 20
-Inputs: 
-p: p_oe vector, calculated at an optimal true anomaly 
-"""
-function calculate_alpha_star(p, sc::basicSolarSail)
-    px = p[1] 
-    py = p[2] 
-    pz = p[3]
-    C1 = sc.C[1]
-    C2 = sc.C[2]
-    C3 = sc.C[3]
-
-    k = px/sqrt(py^2+pz^2)
-    αstar0 = atan(0.25*(-3*k+sqrt(8+9*k^2)))
-    Fstar = k*(3*C1*cos(αstar0)^2+2*C2*cos(αstar0)+C3)*sin(αstar0)-C1*cos(αstar0)*(1-3*sin(αstar0)^2)-C2*cos(2*αstar0)
-    Fstar_prime = k*(3*C1*(cos(αstar0)^3-2*cos(αstar0)*sin(αstar0)^2) + 2*C2*cos(2*αstar0)+C3*cos(αstar0)) - 
-        C1*sin(αstar0)*(2-9*cos(αstar0)^2) + 2*C2*sin(2*αstar0)
-    alphastar = αstar0 - Fstar/Fstar_prime
-
-    return alphastar
-end
-
-
-"""
-This is a function for debugging
-    analytical partial for penalty wrt eccentricity
-"""
-function analytical_dPde(e, a, params::QLawParams)
-    kimp = params.kimp
-    Aimp = params.Aimp
-    rpmin = params.rp_min
-    dPde = kimp*a/rpmin * Aimp*exp(kimp * (1-a*(1-e)/rpmin))
-
-end
-
-"""
-use finitediff on this and compare to above
-"""
-function Pfun(e, a, params)
-    kimp = params.kimp
-    Aimp = params.Aimp
-    rpmin = params.rp_min
-    P = Aimp*exp(kimp * (1-a*(1-e)/rpmin))
-end
+=#

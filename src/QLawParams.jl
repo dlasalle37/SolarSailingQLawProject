@@ -61,8 +61,8 @@ function QLawParams(
     oe0,
     oet,
     oeTols; ### MANDATORY INPUTS END HERE ###
-    mu::Float64=EARTH_MU,
-    mu_sun::Float64=SUN_MU,
+    mu::Float64=GRAV_PARAMS[399], #Defaults to earth
+    mu_sun::Float64=GRAV_PARAMS[10], #helpful to carry this around, not totally necessary
     Woe::Vector{Float64}=[1.0; 1.0; 1.0; 1.0; 1.0],
     Wp::Int=1,
     Aimp::Int=1,
@@ -71,7 +71,7 @@ function QLawParams(
     kesc::Int=10,
     rp_min::Float64=6578.0,
     a_esc::Float64=1.0E5,
-    m_petro::Int=3,
+    m_petro::Int=3, 
     n_petro::Int=4,
     r_petro::Int=2,
     alpha_min::Float64=0.0,

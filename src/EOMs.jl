@@ -230,18 +230,6 @@ function QLawEOM!(dx, x, params::QLawParams, t)
     lam = x[5]
     tru = x[6]
 
-    if e <= 1.0E-4
-        @infiltrate
-        e = 1.0E-4
-    end
-    if inc <= 1.0E-4
-        inc = 1.0E-4
-    end
-
-    # Re-set x, just in case anything changed
-    x = [a, e, inc, ape, lam, tru]
-
-
     #Check for NaN/Infs in time
     if isnan(t) || isinf(t)
         error("Time is $t")
@@ -339,7 +327,7 @@ function continuous_callback_errorcheck(x, t, params::QLawParams)
 end
 """
 function two_body_eom!: 2Body equations of motion
-    Notes: Only used for plotting initial/target hill_to_orbit_transform
+    Notes: Only used for plotting initial/target orbits
     INPUTS:
         dx: for inplace-form of diffeq
         x: anonymous state vector:
