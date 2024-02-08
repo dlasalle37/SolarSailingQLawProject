@@ -33,7 +33,7 @@ OUPUTS:
         argPer: argument of perigee (radians)
         trueAnom: true anomaly (radians)
 """
-function rv2coe(r::Vector, v::Vector, mu::Float64) 
+function rv2coe(r, v, mu) 
     r_norm = norm(r); #scalar position
     v_norm = norm(v); #scalar velocity
 
@@ -103,7 +103,7 @@ Outputs:
     r: inertial position vector (km)
     v: inertial velocity vector (km/s)
 """
-function coe2rv(a::Float64, e::Float64, i::Float64, w::Float64, RAAN::Float64, nu::Float64, mu::Float64)
+function coe2rv(a, e, i, w, RAAN, nu, mu)
     p = a*(1-e^2); #semi-latus rectum
     r = p / (1+e*cos(nu)); #scalar r from trajectory
 

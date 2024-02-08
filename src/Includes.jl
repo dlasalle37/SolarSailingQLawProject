@@ -16,9 +16,10 @@ using DiffEqCallbacks
 
 #Includes
 include("constants.jl")
+include("splines.jl")
 include("basicSolarSail.jl")
 include("TwoBodyEphemeride.jl")
-#include("Ephemerides.jl")
+include("Ephemerides.jl")
 include("utils.jl")
 include("QLawParams.jl")
 include("EOMs.jl")
