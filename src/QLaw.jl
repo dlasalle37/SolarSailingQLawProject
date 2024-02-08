@@ -255,7 +255,7 @@ function oedotnn(a, e, inc, ape, lam, tru, nustar_oe, sig_oe, eps_oe, tru_E, f0,
     mu_sun = params.mu_sun
     eph = params.eph
     R_H_O_star = hill_to_orbit_transform(inc, ape, lam, nustar_oe)
-    (~, Foe) = augmented_keplerian_varaitions(a, e, inc, ape, lam, nustar_oe, 0, mu) #arg. 5 is irrelevant since we ignore output 1
+    Foe = F(a, e, inc, ape, nustar_oe, mu)
     pvec = -transpose(sig_oe*eps_oe'*Foe*R_H_O_star);
     py = pvec[2] 
     pz = pvec[3]
@@ -314,7 +314,7 @@ function Pfun(e, a, params)
     rpmin = params.rp_min
     P = Aimp*exp(kimp * (1-a*(1-e)/rpmin))
 end
-
+=#
 """
 F: Supplementary function for repeated calls of F(xslow, nustar) as an intermediary step of calculate best-case time-to-go
 Inputs: 
@@ -346,4 +346,3 @@ function F(a, e, i, ω, θ, mu)
     return out
 end
 
-=#

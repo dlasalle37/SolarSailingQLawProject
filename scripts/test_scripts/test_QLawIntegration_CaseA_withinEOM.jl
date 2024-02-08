@@ -84,7 +84,7 @@ for row in axes(kep, 1)
     cart[row,4:6] .= v
 
     # Re-compute the sail angles
-    alpha, beta, dQdx = compute_control(kep[row,:], params)
+    local alpha, beta, dQdx = compute_control(kep[row,:], params)
     angles[row,:] = [alpha, beta]
 end
 

@@ -156,84 +156,6 @@ function get_sunlight_direction(et)
 end
 
 """
-get_heliocentric_position: Solve kepler's equation for ellipses to calculate the position of a planet on its
-heliocentric orbit (true anomaly)
-INPUTS: 
-eph: ephemeride struct containing the initial time and position info of earth in helio orbit
-tf: current time in ephemeris time
-
-OUTPUTS:
-    trueAnom: current position of eph.targID in its heliocentric orbit [rad]
-"""
-function get_heliocentric_position(eph::TwoBodyEphemeride, tf; tol=1.0E-6)
-    mu = SUN_MU
-    t0 = eph.t0;
-    t = tf-t0 # difference between current and initial ephemeris times [seconds]
-    νi = eph.trueAnom_initial 
-    a = eph.semiMajorAxis
-    e = eph.eccentricity
-
-    # use keplers equation for ellipses to calculate current position
-    n = sqrt(mu/a^3)
-    M = n*t  # current mean anomaly to calculate to
-    E0 = 2*atan(sqrt((1-e)/(1+e))*tan(νi/2))  # initial eccentric anomaly
-    M0 = E0 - e*sin(E0)
-
-    #Use newton's method to calculate E at t;
-    done = false
-    Ek = M  # initial guess
-    numLoops = 0
-    while !done
-        nextGuess = Ek + (M0 + M - Ek + e*sin(Ek))/(1-e*cos(Ek))
-        err = abs(nextGuess-Ek)
-
-        if err <= tol
-            Ek = nextGuess
-            done = true
-        else
-            Ek = nextGuess
-            done = false
-            if numLoops >= 100
-                
-                done = true
-                println(eph)
-                println("tf: $tf")
-                error("Earth position calculation nonconvergence")
-                
-            end
-        end
-        numLoops+=1
-    end
-    E=Ek
-    νf = 2*atan(sqrt((1+e)/(1-e)) * tan(E/2))
-    if νf < 0 # putting νf on range 0-2pi
-        νf += 2*pi
-    end
-
-    return νf
-end
-
-"""
-Calculates the planet-sun distance based on earth's current true anomaly.
-Just applies the trajectory equation, based on nominal values of semi-major(a) and eccentricity(e).
-
-Later, it may be possible to implement oscillating values for a and e, just need to turn the TwoBodyEphemeride struct to mutable, and continually update
-a and e values.
-INPUTS:
-    eph: TwoBodyEphemeride with target as planet and observer as sun
-    nu: true anomaly to calculate distance at [radians]
-OUTPUTS:
-    dist: distance to sun [km]
-"""
-function distance_to_sun(eph::TwoBodyEphemeride, nu::Float64)
-    a = eph.semiMajorAxis
-    e = eph.eccentricity
-
-    dist = a*(1-e^2)/(1+e*cos(nu))  # trajectory equation
-    return dist
-end
-
-"""
 hill_to_orbit_transform: A function to construct the rotation matrix from the hill frame to the orbit frame
 Notes: 
     - This is a general rotation matrix defined in 'Solar Sailing Q-Law for Planetocentric, Many-Revolution Sail Orbit Transfers' by Oguri & McMahon
@@ -250,4 +172,17 @@ function hill_to_orbit_transform(inc, ape, lam, tru)
              sin(inc)*sin(lam) -cos(lam)*sin(inc) cos(inc)
             ]
     return R
+end
+
+
+"""
+function get_gm(id): get the gravitational parameter (GM, or mu) of a celestial body by passing in its SPICE ID
+    INPUTS: id: SPICE ID of body
+    OUTPUTS: mu: GM of body given by [id]
+    
+    dependencies: Info is pulled from GRAV_PARAMS dictionary in constants.jl
+"""
+function get_gm(id)
+    mu = GRAV_PARAMS[id]
+    return mu
 end
