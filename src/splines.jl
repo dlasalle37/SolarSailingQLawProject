@@ -304,3 +304,44 @@ function interpolate(spline::CubicSpline{T,U,V}, x) where {T,U <: Nothing,V}
     cvec = view(spline.c, 1 + 4*(idx - 1):4*idx)
     return dot(cvec, xvec)
 end
+
+"""
+    function Position Partials
+Retrieves the partials drdx, dydx, dzdx of the CubicSpline.
+
+INPUTS: spline: a CubicSpline
+        t: time in SPICE ephemeris time to get state from
+
+OUTPUTS: 
+        - 3-element vector where each element is a coordinate direction's partial wrt the independent variable x. 
+"""
+function getPositionPartials(spline::CubicSpline, x)
+
+    # Check that t is in [0, 1]
+    if x < 0.0 || x > 1.0 # Not working with Symbolics for sparsity detection atm
+        throw(DomainError("Time passed to getState() is outside of CubicSpline bounds."))
+    end
+
+    # Find relevent polynomial index
+    idx   = 0
+    @inbounds for i in 1:length(spline.xs) - 1
+        if x >= spline.xs[i] && x <= spline.xs[i + 1]
+            idx = i
+            break
+        end
+    end
+    idx == 0 && throw(ErrorException("Could not find bracketing interval in xs for x."))  
+
+    xx   = x*x
+
+    # Compute Partials (velocity)
+    xx   = x*x
+    # For a cubic ax^3+bx^2+cx+d, the derivative takes the form 3ax^2+2bx+c
+    drdx = zeros(3)
+    xvec = SVector(3*xx,2*x, 1.0)
+    cmat = transpose(view(spline.c, 1 + 4*(idx - 1):4*idx-1, :)) #only taking (a, b, c) for each component 
+    mul!(drdx, cmat, xvec)
+
+    return SVector(drdx...)
+
+end
