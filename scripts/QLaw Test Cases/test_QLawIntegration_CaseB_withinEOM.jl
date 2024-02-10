@@ -12,13 +12,14 @@ furnsh("de440.bsp")
 # Simulation time setup:
 date = "2023-01-01T12:30:00" 
 startTime = utc2et(date)  # start date in seconds past j2000
-simTime = 150*86400 # amount of time [s] to simulate for
+simTime = 165*86400 # amount of time [s] to simulate for
 endTime = startTime+simTime
 
 # QLaw Parameter setup
-eph = twoBodyEarthEphemeride(startTime, endTime)  # create the earth ephemeride
+eph = Ephemeride((startTime, endTime), 1000, 399, 10, "ECLIPJ2000")
 sc = basicSolarSail()
-nue = get_heliocentric_position(eph, eph.t0)
+coee = getCOE(eph, eph.t0)
+nue = coee[6]
 X0 = [9222.7; 0.20; 0.573*pi/180; 0.00; 2.0354056994857928-nue; 0.0]  # COE initial conditions [a, e, i, argPer, lambda, trueAnom]
 XT = [42164.0, 0.10, 10.0*pi/180, 270.0*pi/180, 90.0*pi/180] # Targets # note that targets has 5 elements, while X0 has 6
 oetols = [10, 0.001, 0.01, 0.01, 0.01]
@@ -76,7 +77,8 @@ cart = Matrix{Float64}(undef, size(kep))
 ran = Vector{Float64}(undef, size(kep)[1])
 angles = Matrix{Float64}(undef, (size(kep)[1], 2))
 for row in axes(kep, 1)
-    local nue = get_heliocentric_position(eph, eph.t0+t[row]) # get earth pos @ each time for conversion to keplerian elemetns
+    local coe = getCOE(eph, eph.t0+t[row])
+    local nue = coe[6] # pull true anomaly
     ran[row] = kep[row,5]+nue # save RAAN to its own variable to plot later
 
     # Get cartesian Coords
@@ -85,7 +87,7 @@ for row in axes(kep, 1)
     cart[row,4:6] .= v
 
     # Re-compute the sail angles
-    alpha, beta, dQdx = compute_control(kep[row,:], params)
+    local alpha, beta, dQdx = compute_control(kep[row,:], params)
     angles[row,:] = [alpha, beta]
 end
 

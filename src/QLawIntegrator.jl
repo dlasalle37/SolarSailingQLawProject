@@ -34,11 +34,11 @@ function QLawIntegrator(ps::QLawParams)
     end
     # begin integration
     done = false
-    maxTime = ps.max_sim_time
+    maxTime = ps.max_sim_time+eph.t0; #the ephemeris time [et] to stop integration at
     abstol = ps.abstol
     reltol = ps.reltol
     idx = 0
-    integTime = 0 # time from eph.t0
+    integTime = eph.t0 # time from eph.t0
     exitcode = :None
     while !done
         x = X0;

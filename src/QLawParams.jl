@@ -1,7 +1,7 @@
 mutable struct QLawParams
     # Basic Parameters
     sc::basicSolarSail
-    eph::TwoBodyEphemeride
+    eph::Ephemeride
     mu::Float64
     mu_sun::Float64
 
@@ -57,7 +57,7 @@ end
 # Constructor 
 function QLawParams(
     sc::basicSolarSail,
-    eph::TwoBodyEphemeride,
+    eph::Ephemeride,
     oe0,
     oet,
     oeTols; ### MANDATORY INPUTS END HERE ###

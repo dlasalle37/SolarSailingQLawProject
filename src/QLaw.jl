@@ -159,9 +159,13 @@ function calculate_Q(x, params)
         se = svec_P[1]; sp = svec_P[2]; sh = svec_P[3]; #breaking it down
 
         # Ballistic Evolution of state (as a function of x)
-        e_E = eph.eccentricity
-        a_E = eph.semiMajorAxis
-        tru_E = get_heliocentric_position(eph, t) # earth heliocentric true anom evaluated at current time
+        coe = getCOE(eph, t)
+        a_E = coe[1]
+        e_E = coe[2]
+        tru_E = coe[6] # pull true anomaly
+        #e_E = eph.eccentricity
+        #a_E = eph.semiMajorAxis
+        #tru_E = get_heliocentric_position(eph, t) # earth heliocentric true anom evaluated at current time
         nudot = (1+e*cos(tru))^2 / (1-e^2)^(3/2) * sqrt(mu/a^3);
         nudot_earth = (1+e_E*cos(tru_E))^2 / (1-e_E^2)^(3/2) * sqrt(mu_sun/a_E^3);
 
@@ -170,20 +174,21 @@ function calculate_Q(x, params)
         # BEST CASE TIME TO GO's
         # Semi-major axis:
         nustar_a = atan(sig_a*se, -sig_a*sp)
-        adotnn = oedotnn(a, e, inc, ape, lam, tru, nustar_a, sig_a, eps_a, tru_E, f0, params)
+        adotnn = oedotnn(a, e, inc, ape, lam, tru, nustar_a, sig_a, eps_a, tru_E, f0, params, t)
         tau_a = abs(dista)/-adotnn  # best-case ttg term
         
         # Ecccentricity
             # For eccentricity, two edotnn's are computed and compared, smaller is taken and used in Q
         nustar_e1 = 0.5*atan(sig_e*se, -sig_e*sp) + 0*pi
         nustar_e2 = 0.5*atan(sig_e*se, -sig_e*sp) + 1*pi
-        edotnn1 = oedotnn(a, e, inc, ape, lam, tru, nustar_e1, sig_e, eps_e, tru_E, f0, params)
-        edotnn2 = oedotnn(a, e, inc, ape, lam, tru, nustar_e2, sig_e, eps_e, tru_E, f0, params)
+        edotnn1 = oedotnn(a, e, inc, ape, lam, tru, nustar_e1, sig_e, eps_e, tru_E, f0, params, t)
+        edotnn2 = oedotnn(a, e, inc, ape, lam, tru, nustar_e2, sig_e, eps_e, tru_E, f0, params, t)
         edotnn = min(edotnn1, edotnn2)
 
-        # need to clip edotnn if it is near-zero 
-        d = distance_to_sun(eph, tru_E)
-        G0 = 1.02E14 # solar flux constant at earth [kgkm/s^2]
+        # need to clip edotnn if it is near-zero
+        ephState = getState(eph, t)
+        d = norm(view(ephState, 1:3))
+        G0 = get_solar_flux(eph.targ) # solar flux constant at earth [kgkm/s^2]
         a_over_m = sc.areaParam
         ε = 1.0E-5 # given in the Oguri paper as a constant for numerical simulations
         clip_val = -ε*a_over_m*(G0/d^2)*sqrt(a_t/mu)
@@ -195,7 +200,7 @@ function calculate_Q(x, params)
         
         # Inclination
         nustar_inc = pi/2 - ape + sign(sig_inc*sh)*(asin(e*sin(ape))+pi/2)
-        incdotnn = oedotnn(a, e, inc, ape, lam, tru, nustar_inc, sig_inc, eps_inc, tru_E, f0, params)
+        incdotnn = oedotnn(a, e, inc, ape, lam, tru, nustar_inc, sig_inc, eps_inc, tru_E, f0, params, t)
         tau_inc = abs(distinc)/-incdotnn
 
         # Argument of periapsis
@@ -211,7 +216,7 @@ function calculate_Q(x, params)
             nustar_ape = nu[argmin(mappedvals)] # the nu that minimized mappedvals is the approx. nustar for ape
 
             # From here, it is the same as the others
-            apedotnn = oedotnn(a, e, inc, ape, lam, tru, nustar_ape, sig_ape, eps_ape, tru_E, f0, params)
+            apedotnn = oedotnn(a, e, inc, ape, lam, tru, nustar_ape, sig_ape, eps_ape, tru_E, f0, params, t)
             tau_ape = abs(distape)/-apedotnn
         end
 
@@ -220,7 +225,7 @@ function calculate_Q(x, params)
             tau_lam = 0.0
         else # only calculate if Wlam !=0
             nustar_lam = pi - ape + sign(sig_lam*sh/sin(inc))*acos(e*cos(ape))
-            lamdotnn = oedotnn(a, e, inc, ape, lam, tru, nustar_lam, sig_lam, eps_lam, tru_E, f0, params)
+            lamdotnn = oedotnn(a, e, inc, ape, lam, tru, nustar_lam, sig_lam, eps_lam, tru_E, f0, params, t)
             tau_lam = abs(distlam)/-lamdotnn
         end
 
@@ -249,7 +254,7 @@ INPUTS:
 OUTPUT:
     oedotnn: positive denominator of best-case time-to-go for given element in oe
 """
-function oedotnn(a, e, inc, ape, lam, tru, nustar_oe, sig_oe, eps_oe, tru_E, f0, params::QLawParams)
+function oedotnn(a, e, inc, ape, lam, tru, nustar_oe, sig_oe, eps_oe, tru_E, f0, params::QLawParams, t)
     sc = params.sc
     mu = params.mu
     mu_sun = params.mu_sun
@@ -263,7 +268,7 @@ function oedotnn(a, e, inc, ape, lam, tru, nustar_oe, sig_oe, eps_oe, tru_E, f0,
     alphastar = calculate_alpha_star(pvec, sc)
     alphastar = median([params.alpha_min, alphastar, params.alpha_max]) # enforcing alphastar range constraint
     ustar = @SVector [alphastar; betastar]  # elementwise optimal control (EOC)
-    astar_hill = aSRP(ustar, sc, eph, tru_E) # SRP accel. evaluated at EOC
+    astar_hill = aSRP(ustar, sc, eph, t) # SRP accel. evaluated at EOC
     oedotnn = sig_oe*eps_oe'*f0 - pvec'*astar_hill # positive denominator of best-case ttg for A
     return oedotnn
 end

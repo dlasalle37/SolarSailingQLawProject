@@ -19,7 +19,7 @@ using SparseArrays: SparseMatrixCSC, spzeros
 include("constants.jl")
 include("splines.jl")
 include("basicSolarSail.jl")
-include("TwoBodyEphemeride.jl")
+#include("TwoBodyEphemeride.jl")
 include("Ephemerides.jl")
 include("utils.jl")
 include("QLawParams.jl")

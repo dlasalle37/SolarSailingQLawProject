@@ -19,3 +19,8 @@ global GRAV_PARAMS=Dict{Int, Float64}(
     301 => 4902.800118, #moon
     499 => 4.28284E4 #Mars
 )
+
+global SOLAR_FLUXES=Dict{Int, Any}(
+    10 => nothing, 
+    399 => 1.02E14 #[kgkm/s^2]
+)

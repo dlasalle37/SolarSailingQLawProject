@@ -80,22 +80,26 @@ Notes:
 inputs:
     u: control variables [alpha, beta]
     sc: basicSolarSail
-    eph: ephemeride object for simulation
+    d: distance to sun
     trueAnom_Earth: earth current true anomaly
 
 outputs:
     aSRP: SRP acceleration vector in Hill (sun-centered) frame
 """
-function aSRP(u, sc::basicSolarSail, eph::TwoBodyEphemeride, trueAnom_Earth)
+function aSRP(u, sc::basicSolarSail, eph::Ephemeride, t)
     # Unpack Inputs:
     α = u[1]
     β = u[2]
     C1 = sc.C[1]
     C2 = sc.C[2]
     C3 = sc.C[3]
-    d = distance_to_sun(eph, trueAnom_Earth)
     C1 = sc.C[1]; C2 = sc.C[2]; C3 = sc.C[3]
-    G0 = 1.02E14 # solar flux constant at earth [kgkm/s^2]
+
+    # Ephemeride-based calculations
+    ephState = getState(eph, t)
+    d = norm(view(ephState, 1:3)) # distance
+
+    G0 = get_solar_flux(eph.targ) # solar flux constant at earth (or other target of ephemeride)[kgkm/s^2]
     a1 = C1*cos(α)^2+C2*cos(α)+C3  # sun frame r-direction, not scaled
     a2 = -(C1*cos(α)+C2)*sin(α)sin(β)  # sun frame theta-direction, not scaled
     a3 = -(C1*cos(α)+C2)*sin(α)cos(β)  # sun frame h-direction, not scaled
@@ -121,18 +125,18 @@ u: control vector containing:
     α: cone angle (radians)
     β: clock angle (radians)
 sc: solar sail struct 
-trueAnom_earth: earth current true anomaly (to calculate SRP at)
-eph: ephemeride struct
+eph: Ephemeride struct (sun should be center)
+t: current time in et
 OUTPUTS:
 aSRP_oFrame: acceleration vector in the orbit frame [km/s^2]
 """
-function aSRP_orbitFrame(spacecraftState, u, sc::basicSolarSail, trueAnom_earth, eph::TwoBodyEphemeride)
+function aSRP_orbitFrame(spacecraftState, u, sc::basicSolarSail, eph::Ephemeride, t)
     # unpack current state
     method = sc.method
     inc = spacecraftState[3]; 
     argPer = spacecraftState[4];
     trueAnom = spacecraftState[6];
-    a_S = aSRP(u, sc, eph, trueAnom_earth) # hill frame SRP
+    a_S = aSRP(u, sc, eph, t) # hill frame SRP
 
     # Now, create rotation matrix from sun frame to orbit frame
     # R_S_0 = R3(trueAnom + argPer)*R1(inc)*R3(lambda)
@@ -180,9 +184,12 @@ function gauss_variational_eqn!(dx, x, params::QLawParams, t)
     state = @SVector [a, e, inc, argPer, lambda, trueAnom]
     # get the acceleration:
     # Compute earth coe at current time
-    nue = get_heliocentric_position(eph, params.current_time) # note, args ideally are (eph, eph.t0+t), but leave it like this for now (approx.same result)
-
-    a_SRP_O = aSRP_orbitFrame(state, u, sc, nue, eph);  # SRP acceleration resolved into the O (orbit) frame where O{s/c, er_hat, eθ_hat, eh_hat}
+    #nue = get_heliocentric_position(eph, params.current_time) # note, args ideally are (eph, eph.t0+t), but leave it like this for now (approx.same result)
+    coe = getCOE(eph, params.current_time)
+    nue = coe[6] # pull true anomaly
+    ae = coe[1] # pull semi-major axis
+    ee = coe[2] # pull eccentricity
+    a_SRP_O = aSRP_orbitFrame(state, u, sc, eph, t);  # SRP acceleration resolved into the O (orbit) frame where O{s/c, er_hat, eθ_hat, eh_hat}
 
     # Calculate some necessary parameters for Gauss's Variational Equations:
     p = a*(1-e^2)  # s/c semi-latus [km]
@@ -192,9 +199,6 @@ function gauss_variational_eqn!(dx, x, params::QLawParams, t)
     #Oguri formulation
     nuDot = sqrt(mu/a^3)*(1+e*cos(trueAnom))^2 / (1-e^2)^(3/2)
 
-    
-    ae = eph.semiMajorAxis
-    ee = eph.eccentricity
     nuDot_earth = sqrt(mu_sun/ae^3)*(1+ee*cos(nue))^2 / (1-ee^2)^(3/2) 
     
     if method == :Kep # if the OE set is keplerian
@@ -220,6 +224,9 @@ Inputs:
     t: time [s]
 """
 function QLawEOM!(dx, x, params::QLawParams, t)
+    # update Time
+    params.current_time = t # current time in ephemeris time [s]
+
     # Unpack
     eph = params.eph # ephemeride struct containing earth's helio position at epoch and epoch time in ephemeris time
     mu = params.mu
@@ -236,22 +243,23 @@ function QLawEOM!(dx, x, params::QLawParams, t)
     end
 
     # Update Earth Position
-    nue = get_heliocentric_position(eph, t)
+    coee = getCOE(eph, t)
+    nue = coee[6]
 
     # Compute Control:
     alphastar, betastar, dQdx = compute_control(x, params)
     u = @SVector [alphastar; betastar]
 
     ## Compute derivatives based on control:
-    a_SRP_O = aSRP_orbitFrame(x, u, sc, nue, eph);  # SRP acceleration resolved into the O (orbit) frame where O{s/c, er_hat, eθ_hat, eh_hat}
+    a_SRP_O = aSRP_orbitFrame(x, u, sc, eph, t);  # SRP acceleration resolved into the O (orbit) frame where O{s/c, er_hat, eθ_hat, eh_hat}
     
     # Error Check, DELETE later. Checking if any components of SRP are > 1E^-3 km/s^2
     if any(x->x>1.0E-3, a_SRP_O)
         @infiltrate
     end
     
-    ae = eph.semiMajorAxis
-    ee = eph.eccentricity
+    ae = coee[1]
+    ee = coee[2]
     mu_sun = params.mu_sun
     nuDot_earth = sqrt(mu_sun/ae^3)*(1+ee*cos(nue))^2 / (1-ee^2)^(3/2) 
     f0, F = augmented_keplerian_varaitions(a, e, inc, ape, lam, tru, nuDot_earth, mu)
@@ -262,13 +270,11 @@ function QLawEOM!(dx, x, params::QLawParams, t)
     if  dQdt > 0.0 # If dQdt> 0, it is implied that there is no control to decrease error
         @infiltrate false # for debugging
         alphastar = pi/2 # if dQdt>0, zero out SRP acceleration from the sail by setting alpha=90deg
-        a_SRP_O = aSRP_orbitFrame(x, [alphastar; betastar], sc, nue, eph);
+        a_SRP_O = aSRP_orbitFrame(x, [alphastar; betastar], sc, eph, t);
         #error("Lyapunov condition (dQdt<0) not met at t=$t. dQdt at this time: $dQdt")
     end
 
     dx[1:6] .= f0 + F*(a_SRP_O); 
-    # Update params current time after each integrator loop
-    params.current_time = t # current time in ephemeris time [s]
 
     if (t-eph.t0)/86400 >= 135.0
         @infiltrate false# this is a good point for debugging, set false->true to turn on breakpoint

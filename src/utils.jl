@@ -186,3 +186,15 @@ function get_gm(id)
     mu = GRAV_PARAMS[id]
     return mu
 end
+
+"""
+function get_solar_flux(id): get the solar flux constant of a celestial body by passing in its SPICE ID
+    INPUTS: id: SPICE ID of body
+    OUTPUTS: G0: solar flux constant [kgkm/s^2]
+    
+    dependencies: Info is pulled from SOLAR_FLUXES dictionary in constants.jl
+"""
+function get_solar_flux(id) 
+    G0 = SOLAR_FLUXES[id] 
+    return G0
+end

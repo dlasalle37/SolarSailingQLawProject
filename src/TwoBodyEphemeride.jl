@@ -1,4 +1,7 @@
 # Ephemeride struct
+"""
+TwoBodyEphemeride: DEPRECATED
+"""
 struct TwoBodyEphemeride
     t0::Float64
     tf::Float64
@@ -116,7 +119,7 @@ INPUTS:
 OUTPUTS:
     dist: distance to sun [km]
 """
-function distance_to_sun(eph::TwoBodyEphemeride, nu::Float64)
+function distance_to_sun(eph::TwoBodyEphemeride, nu)
     a = eph.semiMajorAxis
     e = eph.eccentricity
 

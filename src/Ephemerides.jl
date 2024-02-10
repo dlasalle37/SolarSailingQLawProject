@@ -401,3 +401,22 @@ function getState(e::Ephemeride, t)
     return SVector([r;v])
 
 end
+
+"""
+    getCOE
+Transforms the state at time t into COEs under the assumptions of two-body equations of motion. Generally, this should only be used for heliocentric ephemerides,
+or epehemerides where a satellite is orbiting about a single large body.
+INPUTS:
+    - e: Ephemeride struct (The observer is assumed to be the orbit center)
+    - t: current time [ephemeris time]
+OUPUTS:
+    - coe: vector containing 6 classical keplerian elements
+        - (semi-major axis[km], eccentricity, inclination[rad], arg. perigee [rad], RAAN[rad], true Anom [rad]) 
+"""
+function getCOE(e::Ephemeride, t)
+    state = getState(e, t)
+    r = view(state, 1:3)
+    v = view(state, 4:6)
+    coe = rv2coe(r, v, get_gm(e.obs))
+    return coe
+end
