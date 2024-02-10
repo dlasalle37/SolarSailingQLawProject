@@ -13,6 +13,7 @@ using LinearAlgebra
 using DelimitedFiles
 using Infiltrator
 using DiffEqCallbacks
+using SparseArrays: SparseMatrixCSC, spzeros
 
 #Includes
 include("constants.jl")
