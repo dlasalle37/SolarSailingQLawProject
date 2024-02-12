@@ -18,7 +18,7 @@ endTime = startTime+simTime
 
 # QLaw Parameter setup
 #eph = twoBodyEarthEphemeride(startTime, endTime)  # create the earth ephemeride
-eph = Ephemeride((startTime, endTime), 1000, 399, 10, "ECLIPJ2000")
+eph = Ephemeride((startTime, endTime), 1000, 399, 10, "J2000")
 sc = basicSolarSail()
 #nue = get_heliocentric_position(eph, eph.t0)
 X0 = [9222.7; 0.20; 0.573*pi/180; 0.00; 2.02; 0.0]  # COE initial conditions [a, e, i, argPer, RAAN, trueAnom]

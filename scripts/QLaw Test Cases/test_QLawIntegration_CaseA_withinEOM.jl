@@ -16,7 +16,7 @@ simTime = 55*86400 # amount of time [s] to simulate for
 endTime = startTime+simTime
 
 # ======= QLaw Parameter setup
-eph = Ephemeride((startTime, endTime), 1000, 399, 10, "ECLIPJ2000")
+eph = Ephemeride((startTime, endTime), 1000, 399, 10, "J2000")
 sc = basicSolarSail()
 X0 = [9222.7; 0.20; 0.573*pi/180; 0.00; 2.02; 0.0]  # COE initial conditions [a, e, i, argPer, lamba, trueAnom]
 XT = [26500.0, 0.75, 0.01*pi/180, 0.0*pi/180, 90*pi/180] # Targets # note that targets has 5 elements, while X0 has 6

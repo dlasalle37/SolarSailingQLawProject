@@ -1,5 +1,30 @@
 
 # Some utility functions, not specifically associated with anything
+"""
+    isEclipsed()
+Description:
+    -Determines if a spacecraft is eclipsed by a body. The eclipsing body must be the center of the reference frame from which the spacecraft's
+    state is defined. This function only checks the umbral cone, so it returns a boolean true for an eclipsed spacecraft and a false for a 
+    a spacecraft not in the planet's umbral cone.
+
+Inputs: 
+    - e::Ephemeride :The ephemeride should be expressed in the same reference frame (given by e.reference) as the state
+        The ephemeride itself should have the sun as the observer and the planet as the target to ensure correct directionality of vectors. 
+    - state: vector of the spacecraft's state in an inertial reference frame centered at the occulting body. (e.g. J2000 for Earth)
+    - et: current ephemeris time (defined by SPICE as seconds from the J2000 epoch)
+
+Outputs:
+    - ret: boolean true if spacecraft is in umbral cone, false if not
+"""
+function isEclipsed(e::Ephemeride, state, et)
+
+    r = view(state, 1:3)
+    v = view(state, 4:6)
+
+
+end
+
+
 function shadow_function()
     #= Formulation can be found sure at https://ai-solutions.com/_help_Files/spacecraft_percentshadow_0_nanosecond.htm\
     Inputs: (edit once defined)

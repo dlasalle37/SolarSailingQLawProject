@@ -16,7 +16,7 @@ simTime = 165*86400 # amount of time [s] to simulate for
 endTime = startTime+simTime
 
 # QLaw Parameter setup
-eph = Ephemeride((startTime, endTime), 1000, 399, 10, "ECLIPJ2000")
+eph = Ephemeride((startTime, endTime), 1000, 399, 10, "J2000")
 sc = basicSolarSail()
 coee = getCOE(eph, eph.t0)
 nue = coee[6]
