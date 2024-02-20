@@ -21,11 +21,11 @@ Description: Algorithm is essentially as follows:
 function QLawIntegrator(ps::QLawParams)
     #Pull initial states
     X0 = ps.oe0
-    
-    #Pull targets
 
     # Pull other parameters
     integStep = ps.step_size
+    eph = ps.eph
+    mu = ps.mu
 
     # Storage setup
     if ps.writeData
@@ -38,17 +38,37 @@ function QLawIntegrator(ps::QLawParams)
     abstol = ps.abstol
     reltol = ps.reltol
     idx = 0
-    integTime = eph.t0 # time from eph.t0
+    integTime = eph.t0 # time in et
     exitcode = :None
     while !done
         x = X0;
+
+        # Check eclipse
+        coee=getCOE(eph, integTime)
+        nue = coee[6]
+        (r, ~) = coe2rv(x[1], x[2], x[3], x[4], x[5]+nue, x[6], mu)
+        if isEclipsed(eph, r, integTime)
+            ps.eclipsed=true
+        else
+            ps.eclipsed=false
+        end
+
         # Compute control
         tf = integTime+integStep
         tspan = (integTime, tf)
-        α, β, ~ = compute_control(x, ps)
-        ps.alpha = α
-        ps.beta = β
-        u = @SArray [α; β]
+
+        if ps.eclipsed #if eclipsed, keep control the same as last timestep
+            α = ps.alpha
+            β = ps.beta
+            u = @SArray [α; β]
+        else
+            α, β, ~ = compute_control(x, ps)
+            ps.alpha = α
+            ps.beta = β
+            u = @SArray [α; β]
+        end
+
+        # Solce the problem
         prob = ODEProblem(gauss_variational_eqn!, x, tspan, ps, abstol=abstol, reltol=reltol)
         sol = solve(prob)
         

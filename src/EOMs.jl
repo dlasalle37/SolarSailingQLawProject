@@ -189,7 +189,13 @@ function gauss_variational_eqn!(dx, x, params::QLawParams, t)
     nue = coe[6] # pull true anomaly
     ae = coe[1] # pull semi-major axis
     ee = coe[2] # pull eccentricity
-    a_SRP_O = aSRP_orbitFrame(state, u, sc, eph, t);  # SRP acceleration resolved into the O (orbit) frame where O{s/c, er_hat, eθ_hat, eh_hat}
+
+    
+    if params.eclipsed
+        a_SRP_O = @SVector(zeros(3))
+    else
+        a_SRP_O = aSRP_orbitFrame(state, u, sc, eph, t);  # SRP acceleration resolved into the O (orbit) frame where O{s/c, er_hat, eθ_hat, eh_hat}
+    end
 
     # Calculate some necessary parameters for Gauss's Variational Equations:
     p = a*(1-e^2)  # s/c semi-latus [km]
@@ -246,39 +252,42 @@ function QLawEOM!(dx, x, params::QLawParams, t)
     coee = getCOE(eph, t)
     nue = coee[6]
 
-    # Compute Control:
-    alphastar, betastar, dQdx = compute_control(x, params)
-    u = @SVector [alphastar; betastar]
-
-    ## Compute derivatives based on control:
-    a_SRP_O = aSRP_orbitFrame(x, u, sc, eph, t);  # SRP acceleration resolved into the O (orbit) frame where O{s/c, er_hat, eθ_hat, eh_hat}
-    
-    # Error Check, DELETE later. Checking if any components of SRP are > 1E^-3 km/s^2
-    if any(x->x>1.0E-3, a_SRP_O)
-        @infiltrate
-    end
-    
     ae = coee[1]
     ee = coee[2]
     mu_sun = params.mu_sun
     nuDot_earth = sqrt(mu_sun/ae^3)*(1+ee*cos(nue))^2 / (1-ee^2)^(3/2) 
+
+    # Get Dynamics at current time
     f0, F = augmented_keplerian_varaitions(a, e, inc, ape, lam, tru, nuDot_earth, mu)
 
-    
-    # Check Lyapunov function [dQdt should be negative]
-    dQdt = dQdx'*(f0 + F*(a_SRP_O))
-    if  dQdt > 0.0 # If dQdt> 0, it is implied that there is no control to decrease error
-        @infiltrate false # for debugging
-        alphastar = pi/2 # if dQdt>0, zero out SRP acceleration from the sail by setting alpha=90deg
-        a_SRP_O = aSRP_orbitFrame(x, [alphastar; betastar], sc, eph, t);
-        #error("Lyapunov condition (dQdt<0) not met at t=$t. dQdt at this time: $dQdt")
+    # Eclipse Check
+    RAAN = lam+nue # get the actual keplerian element RAAN from definition of lambda
+    (r, v) = coe2rv(a, e, inc, ape, RAAN, tru, mu)
+    if !isEclipsed(eph, r, t)
+        # Compute Control:
+        alphastar, betastar, dQdx = compute_control(x, params)
+        u = @SVector [alphastar; betastar]
+
+        ## Compute derivatives based on control:
+        a_SRP_O = aSRP_orbitFrame(x, u, sc, eph, t);  # SRP acceleration resolved into the O (orbit) frame where O{s/c, er_hat, eθ_hat, eh_hat}
+        
+        # Check Lyapunov function [dQdt should be negative]
+        dQdt = dQdx'*(f0 + F*(a_SRP_O))
+        if  dQdt > 0.0 # If dQdt> 0, it is implied that there is no control to decrease error
+            alphastar = pi/2 # if dQdt>0, zero out SRP acceleration from the sail by setting alpha=90deg
+            a_SRP_O = aSRP_orbitFrame(x, [alphastar; betastar], sc, eph, t);
+            #error("Lyapunov condition (dQdt<0) not met at t=$t. dQdt at this time: $dQdt")
+        end
+
+    else
+        a_SRP_O = @SVector(zeros(3)) # If isEclipsed is true, SRP is zero
     end
 
     dx[1:6] .= f0 + F*(a_SRP_O); 
 
-    if (t-eph.t0)/86400 >= 135.0
-        @infiltrate false# this is a good point for debugging, set false->true to turn on breakpoint
-    end
+    #if (t-eph.t0)/86400 >= 135.0
+    #    @infiltrate false# this is a good point for debugging, set false->true to turn on breakpoint
+    #end
 end
 
 """

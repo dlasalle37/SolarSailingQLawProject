@@ -17,7 +17,6 @@ simTime = 165.0*24*3600 # amount of time [s] to simulate for
 endTime = startTime+simTime
 
 # QLaw Parameter setup
-eph = twoBodyEarthEphemeride(startTime, endTime)  # create the earth ephemeride
 eph = Ephemeride((startTime, endTime), 1000, 399, 10, "J2000")
 sc = basicSolarSail()
 X0 = [9222.7; 0.20; 0.573*pi/180; 0.00; 2.0354056994857928; 0.0]  # COE initial conditions [a, e, i, argPer, RAAN, trueAnom]

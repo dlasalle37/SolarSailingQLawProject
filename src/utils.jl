@@ -8,19 +8,64 @@ Description:
     a spacecraft not in the planet's umbral cone.
 
 Inputs: 
-    - e::Ephemeride :The ephemeride should be expressed in the same reference frame (given by e.reference) as the state
-        The ephemeride itself should have the sun as the observer and the planet as the target to ensure correct directionality of vectors. 
-    - state: vector of the spacecraft's state in an inertial reference frame centered at the occulting body. (e.g. J2000 for Earth)
+    - e::Ephemeride :The ephemeride should be expressed in the same reference frame (given by e.reference) as the state.
+    The ephemeride should have the sun as the target or observer, and the planet as the other.
+    - r: vector of the spacecraft's position in an inertial reference frame centered at the occulting body. (e.g. J2000 for Earth)
     - et: current ephemeris time (defined by SPICE as seconds from the J2000 epoch)
 
 Outputs:
     - ret: boolean true if spacecraft is in umbral cone, false if not
+Source:
+    - Method for the Calculation of Spacecraft Umbra and Penumbra Shadow Terminator Points (NASA Technical paper 3547) (by: Carlos R. Ortiz Longo and Steven L. Rickman)
 """
-function isEclipsed(e::Ephemeride, state, et)
+function isEclipsed(e::Ephemeride, r, et)
 
-    r = view(state, 1:3)
-    v = view(state, 4:6)
+    # Pull planet state
+    planetState = getState(e, et)
+    sun_planet_dist = norm(view(planetState, 1:3))
 
+    # The calculation below assumes the planet position vector is centered at the planet and points toward the sun
+    # This block modifies the planet state to ensure correct directionality
+    if e.obs == 10 # if the ephemeride observer is 10 (Sun), then the planet state will be directed from the sun to the planet, and needs to be flipped
+        planetState = -1*planetState
+    elseif e.targ != 10 # i.e if neither e.targ or e.obs is the Sun
+        throw(ArgumentError("Neither observer or target of Ephemeride is the Sun(SPICE ID 10). No umbral calculation possible"))
+    end
+    
+
+    # Get direction to the sunlight in the planets inertial frame
+    # note: This is why the planet state wrt sun should be expressed in planet's inertial frame.
+    s_hat = view(planetState, 1:3)/sun_planet_dist # direction to sun
+
+    # first, check if s/c is between sun and planet
+    if dot(r, s_hat) >= 0 # if the dot prod. here is > 0, the s/c position vector is pointed in the same direction as the direction to the sun, and therefore is in sunlight
+        ret = false
+    else   
+        
+        r_s = get_mean_radius(eph.obs) # sun radius
+        r_p = get_mean_radius(eph.targ) # planet radius
+
+        # calculate the umbral cone geometry
+        Xu = (2*r_p)*sun_planet_dist / (2*r_s + 2*r_p) # length of umbral cone
+        au = asin(2*r_p/(2*Xu)) # umbral cone half-angle (at endpoint)
+
+        # project satellite along s_hat
+        r_proj = dot(r, s_hat)*s_hat
+
+        # get difference b/w center of umbral cone and projection point
+        δ = r - r_proj
+
+        # calculate terminator distance for umbra at projected spacecraft location along midnight line
+        ξ = (Xu-norm(r_proj))*tan(au)
+
+        # determination logic
+        if norm(δ) <= ξ # if distance from midnight line is less than or equal to terminator distance, s/c is in the umbral cone
+            ret = true
+        else
+            ret = false
+        end
+
+    end
 
 end
 
@@ -222,4 +267,16 @@ function get_solar_flux(id): get the solar flux constant of a celestial body by 
 function get_solar_flux(id) 
     G0 = SOLAR_FLUXES[id] 
     return G0
+end
+
+"""
+function get_mean_radius(id): get the mean radius of a celestial body by passing in its SPICE ID
+    INPUTS: id: SPICE ID of body
+    OUTPUTS: r: mean radius [km]
+    
+    dependencies: Info is pulled from CELESTIAL_RADII dictionary in constants.jl
+"""
+function get_mean_radius(id)
+    r = CELESTIAL_RADII[id]
+    return r
 end

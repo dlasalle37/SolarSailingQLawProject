@@ -9,6 +9,7 @@ mutable struct QLawParams
     current_time::Float64 # time (ephemeris time)
     alpha::Float64 # control angle alpha [rad]
     beta::Float64 # control angle beta [rad]
+    eclipsed::Bool
 
     #Initial oe's
     oe0::Vector{Float64}
@@ -88,7 +89,13 @@ function QLawParams(
 )
     current_time = eph.t0
 
-    qlawparam = QLawParams(sc, eph, mu, mu_sun, current_time, alpha, beta, oe0, oet, oeTols, Woe, Wp, 
+    # Find out if initial conditions are eclipsed
+    coee = getCOE(eph, current_time)
+    nue = coee[6]
+    (r, ~) = coe2rv(oe0[1], oe0[2], oe0[3], oe0[4], oe0[5]+nue, oe0[6], mu)
+    eclipsed = isEclipsed(eph, r, current_time)
+
+    qlawparam = QLawParams(sc, eph, mu, mu_sun, current_time, alpha, beta, eclipsed, oe0, oet, oeTols, Woe, Wp, 
         Aimp, kimp, Aesc, kesc, rp_min, a_esc, m_petro, n_petro, r_petro, alpha_min, alpha_max, beta_min, beta_max, step_size, max_sim_time, abstol, reltol,
         writeData)
 
