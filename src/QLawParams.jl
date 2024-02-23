@@ -6,7 +6,7 @@ mutable struct QLawParams
     mu_sun::Float64
 
     # Living Parameters
-    current_time::Float64 # time (ephemeris time)
+    current_time::Any # time (ephemeris time)
     alpha::Float64 # control angle alpha [rad]
     beta::Float64 # control angle beta [rad]
     eclipsed::Bool

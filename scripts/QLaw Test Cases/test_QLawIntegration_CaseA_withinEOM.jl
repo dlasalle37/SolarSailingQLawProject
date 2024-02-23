@@ -54,39 +54,65 @@ affect!(integrator) = terminate!(integrator)
 ccb = ContinuousCallback(condition, affect!)
 
 # ====== Run solve function to solve DE
-sol = solve(prob, AutoTsit5(Rosenbrock23()),  saveat=600, callback=ccb)
+sol = solve(prob, AutoTsit5(Rosenbrock23()),  saveat=60, callback=ccb)
 
 print("End Values: ")
 println(sol.u[end])
 #######################################################################################################################################################
-# Writing
-if params.writeData
-    open(datadir("kep.txt"),   "w") do io; writedlm(io,  sol.u); end
-end
-
-# ===== Post-Processing and Plotting
-# First read the data
-kep = readdlm(datadir("kep.txt"), '\t', '\n'; header=false)
+# ===== Post-Processing
+x = reduce(hcat, sol.u)' # full solution (matrix form)
 t = sol.t.-params.eph.t0 # shift time back to start at zero
 
-# Some Post-processing items
-cart = Matrix{Float64}(undef, size(kep))
-ran = Vector{Float64}(undef, size(kep)[1])
-angles = Matrix{Float64}(undef, (size(kep)[1], 2))
-for row in axes(kep, 1)
+kep = Matrix{Float64}(undef, size(x))
+cart = Matrix{Float64}(undef, size(x))
+lambda = Vector{Float64}(undef, size(x)[1])
+angles = Matrix{Float64}(undef, (size(x)[1], 2))
+shadex = []
+shadey = [] 
+shadez = []
+for row in axes(x, 1)
     local coe = getCOE(eph, eph.t0+t[row])
     local nue = coe[6] # pull true anomaly
-    ran[row] = kep[row,5]+nue # save RAAN to its own variable to plot later
 
-    # Get cartesian Coords
-    r, v = coe2rv(kep[row,1], kep[row,2], kep[row,3], kep[row,4], kep[row,5]+nue, kep[row,6], 398600.4418)
+    # Save lambda separately
+    lambda[row] = x[row, 5]
+
+    # Convert to keplerian orbital elements (from lambda = RAAN-nue)
+    kep[row,:] = [x[row,1], x[row,2], x[row,3], x[row,4], x[row,5]+nue, x[row,6]]
+
+    # Convert keplerian oe's to cartesian coords
+    r, v = coe2rv(x[row,1], x[row,2], x[row,3], x[row,4], x[row,5]+nue, x[row,6], 398600.4418)
     cart[row,1:3] .= r
     cart[row,4:6] .= v
+
+    # Gather Eclipse info
+    local eclipsed = isEclipsed(eph, r, eph.t0+t[row])
+    if eclipsed
+        push!(shadex, cart[row, 1])
+        push!(shadey, cart[row, 2])
+        push!(shadez, cart[row, 3])
+    end
+
 
     # Re-compute the sail angles
     local alpha, beta, dQdx = compute_control(kep[row,:], params)
     angles[row,:] = [alpha, beta]
 end
+
+# Writing PP Output
+if params.writeData
+    open(datadir("kep.txt"),   "w") do io; writedlm(io,  kep); end # keplerian oe set
+    open(datadir("cart.txt"), "w") do io; writedlm(io, lambda); end # oe lambda
+    open(datadir("eclipsed.txt"), "w") do io; writedlm(io, [shadex shadey shadez]); end # the eclipsed points
+    open(datadir("cart.txt"), "w") do io; writedlm(io, cart); end # full cartesian trajectory
+end
+
+
+
+# ===== Plotting
+# First read the data
+kep = readdlm(datadir("kep.txt"), '\t', '\n'; header=false)
+cart = readdlm(datadir("cart.txt"), '\t', '\n'; header=false)
 
 #Pull starting, ending points
 startPoint = cart[1, 1:3]
@@ -106,9 +132,10 @@ ax = GM.Axis3(
 )
 
 lin = GM.lines!(ax, cart[:,1], cart[:,2], cart[:,3], color=:blue, linewidth=0.5)
+EclipsedPoints = GM.scatter!(ax, shadex, shadey, shadez, color=:black, markersize=1)
 
 # Plot start/end points
-sP = GM.scatter!(ax, startPoint[1], startPoint[2], startPoint[3], markersize=10.0, color=:black)
+sP = GM.scatter!(ax, startPoint[1], startPoint[2], startPoint[3], markersize=10.0, color=:green)
 eP = GM.scatter!(ax, endPoint[1], endPoint[2], endPoint[3], markersize=10.0, color=:red)
 
 ## Create and plot initial/final orbits 
@@ -205,9 +232,11 @@ GM.lines!(axa, t/86400, kep[:,1])
 GM.lines!(axe, t/86400, kep[:,2])
 GM.lines!(axi, t/86400, kep[:,3]*180/pi)
 GM.lines!(axape, t/86400, kep[:,4]*180/pi)
-GM.lines!(axlam, t/86400, kep[:,5]*180/pi)
-GM.lines!(axRAN, t/86400, ran*180/pi)
+GM.lines!(axlam, t/86400, lambda*180/pi)
+GM.lines!(axRAN, t/86400, kep[:,5]*180/pi)
 GM.lines!(axtru, t/86400, kep[:,6]*180/pi)
+
+
 
 
 # Unload Kernels
