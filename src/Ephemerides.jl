@@ -378,11 +378,12 @@ Use the interpolation tools to retrieve the entire state of a target body at tim
 
 # Inputs:
     - e::Ephemeride; instantiated ephemeride struct
-    - t: some time in SPICE Ephemeris time between e.t0 and e.Transfer
+    - t: some time in SPICE Ephemeris time between e.t0 and e.tf
 # Outputs:
     - state: 6x1 state vector [pos{3x1}; vel{3x1}] at time t with units [km{3x1};km/s{3x1}]
 """
-function getState(e::Ephemeride, t)
+function getState(e::Ephemeride, t::Float64)
+
     # Check bounds of time
     if t < eph.t0 || t > e.tf
         throw(DomainError("Time value given to getState() is out of the Ephemeride's bounds"))
@@ -419,4 +420,35 @@ function getCOE(e::Ephemeride, t)
     v = view(state, 4:6)
     coe = rv2coe(r, v, get_gm(e.obs))
     return coe
+end
+
+"""
+    getState
+Use the interpolation tools to retrieve the entire state of a target body at time some time t. This method handles ForwardDiff Dual Types.
+
+# Inputs:
+    - e::Ephemeride; instantiated ephemeride struct
+    - t::ForwardDiff.Dual; t.val should be some time in SPICE Ephemeris time between e.t0 and e.Transfer 
+# Outputs:
+    - state: 6x1 state vector [pos{3x1}; vel{3x1}] at time t with units [km{3x1};km/s{3x1}]
+"""
+function getState(e::Ephemeride, t::ForwardDiff.Dual)
+    t = t.value
+    # Check bounds of time
+    if t < eph.t0 || t > e.tf
+        throw(DomainError("Time value given to getState() is out of the Ephemeride's bounds"))
+    end
+
+    spline = e.spline
+    # Scale time
+    τ = (t - e.t0) / (e.tf - e.t0) 
+
+    r = interpolate(spline, τ)
+
+    drdτ = getPositionPartials(spline, τ)
+    dτdt = 1/(e.tf-e.t0)
+    v = drdτ*dτdt 
+
+    return SVector([r;v])
+
 end

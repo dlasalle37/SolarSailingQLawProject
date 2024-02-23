@@ -104,10 +104,13 @@ end
 
 # Writing PP Output
 if params.writeData
+    # Writing to the datadir, paste these files into scripts\data for matlab plotting
     open(datadir("kep.txt"),   "w") do io; writedlm(io,  kep); end # keplerian oe set
-    open(datadir("cart.txt"), "w") do io; writedlm(io, lambda); end # oe lambda
+    open(datadir("lambda.txt"), "w") do io; writedlm(io, lambda); end # oe lambda
     open(datadir("eclipsed.txt"), "w") do io; writedlm(io, [shadex shadey shadez]); end # the eclipsed points
     open(datadir("cart.txt"), "w") do io; writedlm(io, cart); end # full cartesian trajectory
+    open(datadir("angles.txt"), "w") do io; writedlm(io, angles); end # sail angles
+    open(datadir("discrete_times.txt"), "w") do io; writedlm(io, t); end # time vector to plot against
 end
 
 

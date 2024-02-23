@@ -12,7 +12,7 @@ furnsh("de440.bsp")
 # Simulation time setup:
 date = "2023-01-01T12:30:00" 
 startTime = utc2et(date)  # start date in seconds past j2000
-simTime = 30*86400 # amount of time [s] to simulate for
+simTime = 50*86400 # amount of time [s] to simulate for
 endTime = startTime+simTime
 
 # QLaw Parameter setup
@@ -21,9 +21,9 @@ sc = basicSolarSail()
 coee = getCOE(eph, eph.t0)
 nue = coee[6]
 X0 = [26500; 0.70; 0.573*pi/180; 0.000; 2.0354056994857928-nue; 0.0]  # COE initial conditions [a, e, i, argPer, lambda, trueAnom]
-XT = [26510, 0.8, 10.0*pi/180, 80*pi/180, 90.0*pi/180] # Targets # note that targets has 5 elements, while X0 has 6
+XT = [26700, 0.75, 5.0*pi/180, 30*pi/180, 90.0*pi/180] # Targets # note that targets has 5 elements, while X0 has 6
 oetols = [10, 0.001, 0.01, 0.01, 0.01]
-Woe = [1.0, 0.0, 0.0, 1.0, 0.0]
+Woe = [1.0, 1.0, 1.0, 1.0, 0.0]
 params = QLawParams(
     sc, 
     eph, 
@@ -57,7 +57,7 @@ affect!(integrator) = terminate!(integrator)
 ccb = ContinuousCallback(condition, affect!)
 
 # ====== Run solve function to solve DE
-sol = solve(prob, AutoTsit5(Rosenbrock23()),  saveat=60, callback=ccb) #isoutofdomain=(y,p,t)->any(x->x<0,y[2])
+sol = solve(prob, AutoTsit5(Rosenbrock23()),  saveat=60, callback=ccb) 
 
 print("End Values: ")
 println(sol.u[end])
@@ -104,10 +104,13 @@ end
 
 # Writing PP Output
 if params.writeData
+    # Writing to the datadir, paste these files into scripts\data for matlab plotting
     open(datadir("kep.txt"),   "w") do io; writedlm(io,  kep); end # keplerian oe set
-    open(datadir("cart.txt"), "w") do io; writedlm(io, lambda); end # oe lambda
+    open(datadir("lambda.txt"), "w") do io; writedlm(io, lambda); end # oe lambda
     open(datadir("eclipsed.txt"), "w") do io; writedlm(io, [shadex shadey shadez]); end # the eclipsed points
     open(datadir("cart.txt"), "w") do io; writedlm(io, cart); end # full cartesian trajectory
+    open(datadir("angles.txt"), "w") do io; writedlm(io, angles); end # sail angles
+    open(datadir("discrete_times.txt"), "w") do io; writedlm(io, t); end # time vector to plot against
 end
 
 
@@ -135,7 +138,6 @@ ax = GM.Axis3(
 )
 
 lin = GM.lines!(ax, cart[:,1], cart[:,2], cart[:,3], color=:blue, linewidth=0.5)
-EclipsedPoints = GM.scatter!(ax, shadex, shadey, shadez, color=:black, markersize=1)
 
 # Plot start/end points
 sP = GM.scatter!(ax, startPoint[1], startPoint[2], startPoint[3], markersize=10.0, color=:green)
