@@ -6,8 +6,8 @@ using DrWatson
 include(srcdir("Includes.jl"))
 
 ## SPICE SETUP
-furnsh("naif0012.tls")
-furnsh("de440.bsp")
+furnsh(datadir("naif0012.tls"))
+furnsh(datadir("de440.bsp"))
 ## END SPICE SETUP
 
 sc=basicSolarSail();

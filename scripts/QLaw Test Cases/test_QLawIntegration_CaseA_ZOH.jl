@@ -6,8 +6,8 @@ import GeometryBasics as GB
 import GLMakie as GM
 
 ## SPICE SETUP
-furnsh("naif0012.tls")
-furnsh("de440.bsp")
+furnsh(datadir("naif0012.tls"))
+furnsh(datadir("de440.bsp"))
 ## END SPICE SETUP
 
 # Simulation time setup:
