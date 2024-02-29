@@ -382,7 +382,7 @@ Use the interpolation tools to retrieve the entire state of a target body at tim
 # Outputs:
     - state: 6x1 state vector [pos{3x1}; vel{3x1}] at time t with units [km{3x1};km/s{3x1}]
 """
-function getState(e::Ephemeride, t::Float64)
+function getState(e::Ephemeride, t)
 
     # Check bounds of time
     if t < eph.t0 || t > e.tf
@@ -432,23 +432,23 @@ Use the interpolation tools to retrieve the entire state of a target body at tim
 # Outputs:
     - state: 6x1 state vector [pos{3x1}; vel{3x1}] at time t with units [km{3x1};km/s{3x1}]
 """
-function getState(e::Ephemeride, t::ForwardDiff.Dual)
-    t = t.value
-    # Check bounds of time
-    if t < eph.t0 || t > e.tf
-        throw(DomainError("Time value given to getState() is out of the Ephemeride's bounds"))
-    end
+# function getState(e::Ephemeride, t::ForwardDiff.Dual)
+#     t = t.value
+#     # Check bounds of time
+#     if t < eph.t0 || t > e.tf
+#         throw(DomainError("Time value given to getState() is out of the Ephemeride's bounds"))
+#     end
 
-    spline = e.spline
-    # Scale time
-    τ = (t - e.t0) / (e.tf - e.t0) 
+#     spline = e.spline
+#     # Scale time
+#     τ = (t - e.t0) / (e.tf - e.t0) 
 
-    r = interpolate(spline, τ)
+#     r = interpolate(spline, τ)
 
-    drdτ = getPositionPartials(spline, τ)
-    dτdt = 1/(e.tf-e.t0)
-    v = drdτ*dτdt 
+#     drdτ = getPositionPartials(spline, τ)
+#     dτdt = 1/(e.tf-e.t0)
+#     v = drdτ*dτdt 
 
-    return SVector([r;v])
+#     return SVector([r;v])
 
-end
+# end

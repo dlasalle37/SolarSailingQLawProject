@@ -34,16 +34,17 @@ function compute_control(x, params::QLawParams)
 
     # DQDX Calculation:
     
-    #= 
-    There are two different numerical differentiation methods in the 3-line block below
-      To use ForwardDiff: uncomment first two lines, comment third line
-      To use FiniteDiff: uncomment third line, comment first two lines  
-    =#
-    if x[1] < 0 || x[2] > 1 || x[2] < 0
-        @infiltrate
-    end
-    cfg = ForwardDiff.GradientConfig(calculate_Q, x) # GradientConfig
-    dQdx = ForwardDiff.gradient(x->calculate_Q(x, params), x, cfg, Val{false}()) 
+    
+    #There are two different numerical differentiation methods in the block below
+    
+
+    # Comment in this section for ForwardDiff (comment out below section)
+    Q(x) = calculate_Q(x, params) # defining a unary closure to allow for passage of params into ForwardDiff
+    cfg = ForwardDiff.GradientConfig(Q, x) # Get the config
+    dQdx = ForwardDiff.gradient(Q, x, cfg)
+    #dQdx = ForwardDiff.gradient(x->calculate_Q(x, params), x) # this one seems to work instead too
+
+    # Comment in this section for FiniteDiff (comment out above section)
     #dQdx = FiniteDiff.finite_difference_gradient(x->calculate_Q(x, params), x) # using finite diff
     
     Fx = F(a, e, inc, ape, tru, mu)
@@ -169,20 +170,23 @@ function calculate_Q(x, params)
         nudot = (1+e*cos(tru))^2 / (1-e^2)^(3/2) * sqrt(mu/a^3);
         nudot_earth = (1+e_E*cos(tru_E))^2 / (1-e_E^2)^(3/2) * sqrt(mu_sun/a_E^3);
 
-        f0 = @SVector [0; 0; 0; 0; -nudot_earth; nudot];
+        if typeof(t)!=Float64
+            @infiltrate false
+        end
+        #f0 = @SVector [0; 0; 0; 0; -nudot_earth; nudot];
 
         # BEST CASE TIME TO GO's
         # Semi-major axis:
         nustar_a = atan(sig_a*se, -sig_a*sp)
-        adotnn = oedotnn(a, e, inc, ape, lam, tru, nustar_a, sig_a, eps_a, tru_E, f0, params, t)
+        adotnn = oedotnn(a, e, inc, ape, lam, tru, nustar_a, sig_a, eps_a, tru_E, nudot, nudot_earth, params, t)
         tau_a = abs(dista)/-adotnn  # best-case ttg term
         
         # Ecccentricity
             # For eccentricity, two edotnn's are computed and compared, smaller is taken and used in Q
         nustar_e1 = 0.5*atan(sig_e*se, -sig_e*sp) + 0*pi
         nustar_e2 = 0.5*atan(sig_e*se, -sig_e*sp) + 1*pi
-        edotnn1 = oedotnn(a, e, inc, ape, lam, tru, nustar_e1, sig_e, eps_e, tru_E, f0, params, t)
-        edotnn2 = oedotnn(a, e, inc, ape, lam, tru, nustar_e2, sig_e, eps_e, tru_E, f0, params, t)
+        edotnn1 = oedotnn(a, e, inc, ape, lam, tru, nustar_e1, sig_e, eps_e, tru_E, nudot, nudot_earth, params, t)
+        edotnn2 = oedotnn(a, e, inc, ape, lam, tru, nustar_e2, sig_e, eps_e, tru_E,nudot, nudot_earth, params, t)
         edotnn = min(edotnn1, edotnn2)
 
         # need to clip edotnn if it is near-zero
@@ -200,7 +204,7 @@ function calculate_Q(x, params)
         
         # Inclination
         nustar_inc = pi/2 - ape + sign(sig_inc*sh)*(asin(e*sin(ape))+pi/2)
-        incdotnn = oedotnn(a, e, inc, ape, lam, tru, nustar_inc, sig_inc, eps_inc, tru_E, f0, params, t)
+        incdotnn = oedotnn(a, e, inc, ape, lam, tru, nustar_inc, sig_inc, eps_inc, tru_E, nudot, nudot_earth, params, t)
         tau_inc = abs(distinc)/-incdotnn
 
         # Argument of periapsis
@@ -216,7 +220,7 @@ function calculate_Q(x, params)
             nustar_ape = nu[argmin(mappedvals)] # the nu that minimized mappedvals is the approx. nustar for ape
 
             # From here, it is the same as the others
-            apedotnn = oedotnn(a, e, inc, ape, lam, tru, nustar_ape, sig_ape, eps_ape, tru_E, f0, params, t)
+            apedotnn = oedotnn(a, e, inc, ape, lam, tru, nustar_ape, sig_ape, eps_ape, tru_E, nudot, nudot_earth, params, t)
             tau_ape = abs(distape)/-apedotnn
         end
 
@@ -225,7 +229,7 @@ function calculate_Q(x, params)
             tau_lam = 0.0
         else # only calculate if Wlam !=0
             nustar_lam = pi - ape + sign(sig_lam*sh/sin(inc))*acos(e*cos(ape))
-            lamdotnn = oedotnn(a, e, inc, ape, lam, tru, nustar_lam, sig_lam, eps_lam, tru_E, f0, params, t)
+            lamdotnn = oedotnn(a, e, inc, ape, lam, tru, nustar_lam, sig_lam, eps_lam, tru_E, nudot, nudot_earth, params, t)
             tau_lam = abs(distlam)/-lamdotnn
         end
 
@@ -254,7 +258,7 @@ INPUTS:
 OUTPUT:
     oedotnn: positive denominator of best-case time-to-go for given element in oe
 """
-function oedotnn(a, e, inc, ape, lam, tru, nustar_oe, sig_oe, eps_oe, tru_E, f0, params::QLawParams, t)
+function oedotnn(a, e, inc, ape, lam, tru, nustar_oe, sig_oe, eps_oe, tru_E, nudot, nudot_body, params::QLawParams, t)
     sc = params.sc
     mu = params.mu
     mu_sun = params.mu_sun
@@ -269,7 +273,12 @@ function oedotnn(a, e, inc, ape, lam, tru, nustar_oe, sig_oe, eps_oe, tru_E, f0,
     alphastar = median([params.alpha_min, alphastar, params.alpha_max]) # enforcing alphastar range constraint
     ustar = @SVector [alphastar; betastar]  # elementwise optimal control (EOC)
     astar_hill = aSRP(ustar, sc, eph, t) # SRP accel. evaluated at EOC
-    oedotnn = sig_oe*eps_oe'*f0 - pvec'*astar_hill # positive denominator of best-case ttg for A
+
+    #oedotnn = sig_oe*eps_oe'*f0 - pvec'*astar_hill # positive denominator of best-case ttg for A
+    #sigdoteps = sig_oe*eps_oe'
+    dot_eps_oe_f0 = eps_oe[5]*nudot + eps_oe[6]*nudot_body
+    oedotnn = sig_oe*dot_eps_oe_f0 - pvec'*astar_hill # positive denominator of best-case ttg for A
+
     return oedotnn
 end
 
@@ -297,29 +306,6 @@ function calculate_alpha_star(p, sc::basicSolarSail)
     return alphastar
 end
 
-#=============== OLD
-"""
-This is a function for debugging
-    analytical partial for penalty wrt eccentricity
-"""
-function analytical_dPde(e, a, params::QLawParams)
-    kimp = params.kimp
-    Aimp = params.Aimp
-    rpmin = params.rp_min
-    dPde = kimp*a/rpmin * Aimp*exp(kimp * (1-a*(1-e)/rpmin))
-
-end
-
-"""
-use finitediff on this and compare to above
-"""
-function Pfun(e, a, params)
-    kimp = params.kimp
-    Aimp = params.Aimp
-    rpmin = params.rp_min
-    P = Aimp*exp(kimp * (1-a*(1-e)/rpmin))
-end
-=#
 """
 F: Supplementary function for repeated calls of F(xslow, nustar) as an intermediary step of calculate best-case time-to-go
 Inputs: 
@@ -350,4 +336,28 @@ function F(a, e, i, ω, θ, mu)
     out = F*1/h
     return out
 end
+
+#=============== OLD
+"""
+This is a function for debugging
+    analytical partial for penalty wrt eccentricity
+"""
+function analytical_dPde(e, a, params::QLawParams)
+    kimp = params.kimp
+    Aimp = params.Aimp
+    rpmin = params.rp_min
+    dPde = kimp*a/rpmin * Aimp*exp(kimp * (1-a*(1-e)/rpmin))
+
+end
+
+"""
+use finitediff on this and compare to above
+"""
+function Pfun(e, a, params)
+    kimp = params.kimp
+    Aimp = params.Aimp
+    rpmin = params.rp_min
+    P = Aimp*exp(kimp * (1-a*(1-e)/rpmin))
+end
+=#
 

@@ -12,7 +12,7 @@ A cubic spline interpolant.
 struct CubicSpline{
     T <: AbstractVector,
     U <: Union{AbstractArray, Nothing},
-    V <: AbstractArray
+    V <: AbstractArray,
 }
 
     # Cubic spline independant variables
@@ -268,6 +268,46 @@ function interpolate(spline::CubicSpline{T,U,V}, x) where {T,U,V}
 end
 
 """
+    interpolate(spline::CubicSpline, x::ForwardDiff.Dual)
+
+Interpolates the spline at the given value of independant variable `x`, where x is a ForwardDiff Dual type.
+
+# Arguments
+- `spline::CubicSpline`: The spline to interpolate
+- `x::ForwardDiff.Dual`: The value of the independant variable to interpolate to
+
+# Returns
+- `SVector`: The interpolated values of the dependant variables
+"""
+function interpolate(spline::CubicSpline{T,U,V}, x::ForwardDiff.Dual) where {T,U,V}
+    # Check that x is in bounds
+    if x < spline.xs[1] || x > spline.xs[end]
+        throw(DomainError("x is outside of the spline's domain."))
+    end
+
+    # Find relevent polynomial index
+    idx   = 0
+    @inbounds for i in 1:length(spline.xs) - 1
+        if x >= spline.xs[i] && x <= spline.xs[i + 1]
+            idx = i
+            break
+        end
+    end
+    idx == 0 && throw(ErrorException("Could not find bracketing interval in xs for x."))
+
+    # Compute interpolants
+    xx   = x*x
+    xxx  = xx*x
+    xvec = SVector(xxx, xx, x, 1.0)
+    cmat = transpose(view(spline.c, 1 + 4*(idx - 1):4*idx, :))
+    y    = Vector{typeof(x)}(undef, size(cmat, 1))
+    mul!(y, cmat, xvec)
+    @infiltrate false
+    return SVector(y...)
+end
+
+
+"""
     interpolate(spline::CubicSpline, x)
 
 Interpolates the spline at the given value of independant variable `x`.
@@ -306,7 +346,7 @@ function interpolate(spline::CubicSpline{T,U,V}, x) where {T,U <: Nothing,V}
 end
 
 """
-    function Position Partials
+    function getPositionPartials(spline::CubicSpline, x)
 Retrieves the partials drdx, dydx, dzdx of the CubicSpline.
 
 INPUTS: spline: a CubicSpline
@@ -319,7 +359,7 @@ function getPositionPartials(spline::CubicSpline, x)
 
     # Check that t is in [0, 1]
     if x < 0.0 || x > 1.0 # Not working with Symbolics for sparsity detection atm
-        throw(DomainError("Time passed to getState() is outside of CubicSpline bounds."))
+        throw(DomainError("Dependent variable is outside of CubicSpline bounds."))
     end
 
     # Find relevent polynomial index
@@ -334,12 +374,12 @@ function getPositionPartials(spline::CubicSpline, x)
 
     xx   = x*x
 
-    # Compute Partials (velocity)
+    # Compute Partials
     xx   = x*x
     # For a cubic ax^3+bx^2+cx+d, the derivative takes the form 3ax^2+2bx+c
-    drdx = zeros(3)
     xvec = SVector(3*xx,2*x, 1.0)
     cmat = transpose(view(spline.c, 1 + 4*(idx - 1):4*idx-1, :)) #only taking (a, b, c) for each component 
+    drdx = Vector{typeof(x)}(undef, size(cmat, 1))
     mul!(drdx, cmat, xvec)
 
     return SVector(drdx...)
