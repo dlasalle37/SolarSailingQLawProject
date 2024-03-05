@@ -21,7 +21,7 @@ sc = basicSolarSail()
 coee = getCOE(eph, eph.t0)
 nue = coee[6]
 X0 = [26500; 0.70; 0.573*pi/180; 0.000; 2.0354056994857928-nue; 0.0]  # COE initial conditions [a, e, i, argPer, lambda, trueAnom]
-XT = [26700, 0.75, 5.0*pi/180, 30*pi/180, 90.0*pi/180] # Targets # note that targets has 5 elements, while X0 has 6
+XT = [26700, 0.75, 0.2*pi/180, 30*pi/180, 90.0*pi/180] # Targets # note that targets has 5 elements, while X0 has 6
 oetols = [10, 0.001, 0.01, 0.01, 0.01]
 Woe = [1.0, 1.0, 1.0, 1.0, 0.0]
 params = QLawParams(
@@ -57,8 +57,9 @@ affect!(integrator) = terminate!(integrator)
 ccb = ContinuousCallback(condition, affect!)
 
 # ====== Run solve function to solve DE
-sol = solve(prob, AutoTsit5(Rosenbrock23()),  saveat=60, callback=ccb) 
-
+@time begin 
+    sol = solve(prob, AutoTsit5(Rosenbrock23()),  saveat=60, callback=ccb) 
+end
 print("End Values: ")
 println(sol.u[end])
 #######################################################################################################################################################

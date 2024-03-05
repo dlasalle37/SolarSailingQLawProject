@@ -3,7 +3,6 @@ using DrWatson
 include(srcdir("Includes.jl"))
 import GLMakie as GM
 import GeometryBasics as GB
-
 ## SPICE SETUP
 furnsh(datadir("naif0012.tls"))
 furnsh(datadir("de440.bsp"))
@@ -54,10 +53,14 @@ affect!(integrator) = terminate!(integrator)
 ccb = ContinuousCallback(condition, affect!)
 
 # ====== Run solve function to solve DE
-sol = solve(prob, AutoTsit5(Rosenbrock23()),  saveat=60, callback=ccb)
+@time begin # timing the solver only
+    sol = solve(prob, AutoTsit5(Rosenbrock23()),  saveat=60, callback=ccb)
+end
+
 
 print("End Values: ")
 println(sol.u[end])
+
 #######################################################################################################################################################
 # ===== Post-Processing
 x = reduce(hcat, sol.u)' # full solution (matrix form)

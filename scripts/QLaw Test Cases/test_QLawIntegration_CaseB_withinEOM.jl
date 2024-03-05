@@ -57,7 +57,10 @@ affect!(integrator) = terminate!(integrator)
 ccb = ContinuousCallback(condition, affect!)
 
 # ====== Run solve function to solve DE
-sol = solve(prob, AutoTsit5(Rosenbrock23()),  saveat=60, callback=ccb) #isoutofdomain=(y,p,t)->any(x->x<0,y[2])
+@time begin # timing solver only
+    sol = solve(prob, AutoTsit5(Rosenbrock23()),  saveat=60, callback=ccb) #isoutofdomain=(y,p,t)->any(x->x<0,y[2])
+end
+
 
 print("End Values: ")
 println(sol.u[end])
