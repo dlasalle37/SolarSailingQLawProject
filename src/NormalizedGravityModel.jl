@@ -110,11 +110,11 @@ function getFirstPartial(
     P[2,2] = sqrt(3)
 
     for n = 2:nmax-1
-        nidx = n + 1; # Shift, bc julia indexing starts at 1. Note anywhere where n appears in calculation, real n is used, while nidk is only for indexing
+        nidx = n + 1; # Shift bc julia indexing starts at 1. Note anywhere where n appears in calculation, real n is used, while nidx is only for indexing
         Reovrn = Reovrn*Reovr
 
         # First col. terms
-        P[nidx, 1] = alpha(n)*ep*P[nidx-1, 1] - beta(n)*P[nidx-2, 1]
+        P[nidx, 1] = xi(n,0)*ep*P[nidx-1, 1] - eta(n,0)*P[nidx-2, 1]
 
         # inner-diagonal terms
         deltan = sqrt(2*n+1) * P[nidx-1, nidx-1]    # calculating the delta here. The tech document says delta only depends on n and not the state, 
@@ -125,7 +125,7 @@ function getFirstPartial(
         P[nidx, nidx] = sqrt((2*n+1)/(2*n)) * P[nidx-1, nidx-1]
 
         # Initialize summations over m=1->n (m-based summations)
-        sumH_n = zeta(n, 1) * P[nidx, 2] * C[nidx, 1]
+        sumH_n = zeta(n, 0) * P[nidx, 2] * C[nidx, 1]
         sumgam_n = P[nidx, 1] * C[nidx, 1] * (n+1)
         sumJ_n = 0.0
         sumK_n = 0.0
@@ -134,7 +134,6 @@ function getFirstPartial(
             for m = 1:n-2
                 midx = m+1 # same deal here with index vs. actual
                 # Calculate all other legendre's in row nidx
-                @infiltrate false
                 P[nidx, midx] = xi(n, m)*ep*P[nidx-1, midx] - eta(n, m)*P[nidx-2, midx]
             end
 
@@ -161,20 +160,26 @@ function getFirstPartial(
 
                 # Summations (Eq 4-11 for all except sumH_n)
                 sumJ_n = sumJ_n + m*Pnm*(Cnm*Ctil[midx-1] + Snm*Stil[midx-1])
-                sumH_n = sumH_n + P[nidx, midx+1]*Bnmtil*zeta(n, m)
                 sumgam_n = sumgam_n + (n+m+1)*Pnm*Bnmtil
-                sumK_n = sumK_n + m*Pnm*(Cnm*Stil[midx-1] - Snm*Ctil[midx-1])
+                sumK_n = sumK_n + m*Pnm*(Snm*Ctil[midx-1] - Cnm*Stil[midx-1])
+
+                # Sum for Hn is given as below, note only difference from Eq4-11 is multiplication by zeta
+                sumH_n = sumH_n + P[nidx, midx+1]*Bnmtil*zeta(n, m)
 
             end
+
+            # add all m-based summations to n-based summations (n-based meaning summed from n=2:nmax)
             sumj = sumj + Reovrn*sumJ_n
             sumk = sumk + Reovrn*sumK_n
         end
 
-        # These should have values for mmax=0
+        # These two will have values even if mmax = 0 because they are initialized at a nonzero value
+        # so sum them outside of the if statement
         sumh = sumh + Reovrn*sumH_n
         sumgam = sumgam + Reovrn*sumgam_n
     end
 
+    # Putting all the summations together into the gradient 
     Lambda = sumgam + ep*sumh
     g1 = -mu_over_r2 * (Lambda*Xovr - sumj)
     g2 = -mu_over_r2 * (Lambda*Yovr - sumk)
@@ -182,7 +187,7 @@ function getFirstPartial(
     
     dUdx = @SVector [g1; g2; g3]
 
-    return dUdx, P
+    return dUdx, P # note remove P as output later, just for testing
 
 end
 
@@ -229,15 +234,13 @@ function normalized_legendre_generator(nmax, mmax, ε)
         P[nidx,nidx] = sqrt((2*n+1)/(2*n)) * P[nidx-1, nidx-1]
 
         # Compute leftmost column term
-        α = alpha(n)
-        β = beta(n)
-        P[nidx,1] = ε*α*P[nidx-1, 1] - β*P[nidx-2, 1]
+        P[nidx,1] = ε*xi(n,0)*P[nidx-1, 1] - eta(n,0)*P[nidx-2, 1]
 
         # Compute below-diagonal
         δ = sqrt(2*n+1) * P[nidx-1, nidx-1]
         P[nidx, nidx-1] = ε*δ
 
-        for m = 1:n-2
+        for m = 1:n-2 #Starting at column second from the left
             midx = m+1
             ξ = xi(n,m)
             η = eta(n,m)
@@ -247,23 +250,6 @@ function normalized_legendre_generator(nmax, mmax, ε)
 
 
     return P
-end
-
-"""
-    alpha(n)
-Calculate parameter alpha
-"""
-function alpha(n)
-    α = sqrt((2*n+1)*(2*n-1)) / n
-    return α
-end
-
-"""
-    beta(n)
-"""
-function beta(n)
-    β = (n-1)/n * sqrt((2*n+1)/(2*n-3))
-    return β
 end
 
 """
@@ -294,4 +280,18 @@ function zeta(n, m)
     end
 
     return ζ
+end
+
+"""
+    upsilon(n,m)
+parameter upsilon (used for second partial)
+"""
+function upsilon(n,m)
+    if m==0
+        Y = sqrt( n*(n-1)*(n+1)*(n+2)/2 )
+    else
+        Y = sqrt((n-m)*(n-m-1)*(n+m+1)*(n+m+2))
+    end
+
+    return Y
 end
