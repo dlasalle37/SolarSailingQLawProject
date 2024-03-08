@@ -2,20 +2,23 @@ using DrWatson
 @quickactivate "SolarSailingQLawProject"
 include(srcdir("Includes.jl"))
 
-l = datadir("testmat.txt")
+l = datadir("EGM96_to360.ascii")
 R = 6378
 mu = 398600
-nm = 300
+n = 5 # deg
+m = 5 # order
 
-#open(datadir("testmat.txt"), "w") do io; writedlm(io, rand(nm, nm)); end # create random nxm matrix
-x = [3200; -500; 6378]
+x = [5489.150; 802.222; 3140.916] # appendix B vector from nasa technical doc
+ep = x[3]/norm(x) # random value for epsilon, eps=z/r
 want_cf = true
 
+@time begin
+    model = NormalizedGravityModelData(n, m, l, R=6378.139, mu=398600.47);
+    (g, P) = getFirstPartial(model, x, want_cf)
+    Pg = normalized_legendre_generator(n, m, ep); # checking legendre calcs
+    println(P==Pg)
+end
+println("Acceleration [km/s]:")
+println(g)
 
-model = NormalizedGravityModelData(nm, l, l);
-(g, P) = getFirstPartial(model, x, want_cf)
-
-
-ep = 0.8916235738552135 # random value for epsilon, eps=z/r
-Pg = normalized_legendre_generator(nm, nm, ep); # checking legendre calcs
-P==Pg
+getSecondPartial(model, x, want_cf)
