@@ -1,10 +1,8 @@
-#= Gravitational Force Modeling via harmonics
-Source: Fast Gravity with partials nasa technical doc, 1988, appendix A3 for code
-
-Potential Function, U:
-U = µ/r * sum[n=2 to inf](sum[m=0 to n](µ/r * (α/r)^n * P_{n,m}(x_3/r) * (C_{n,m}cos(mλ)+S_{n,m}sin(mλ)) ))
-
+#= 
+Gravitational Force Modeling via harmonics
+Source: Fast Gravity with partials nasa technical doc, 1993. (NASA CR-188243)
 =#
+
 struct NormalizedGravityModelData
 
     n::Int # max degree
@@ -15,6 +13,8 @@ struct NormalizedGravityModelData
 
     C::AbstractArray # Normalized matrix of cosine coefficients
     S::AbstractArray # Normalized matrix of sine coefficients
+
+    GravityModel::Symbol # Model name (example; :EGM96)
 
 end
 
@@ -29,17 +29,19 @@ This model uses normalized coefficients directly.
     Sfile: location of sine coefficients
     R: planetary radius [km]
     mu: planetary gravitational parameter [km^2/s^3]
+    mod: Symbol for gravity model desired (defaults to EGM96)
 
 # Outputs:
     NormalizedGravityModelData: struct to access all necessary data for gravity potential based calculations
 """
-function NormalizedGravityModelData(degree, order, fileloc; R=6738.0, mu=398600.4418)
+function NormalizedGravityModelData(degree, order, fileloc; R=6738.0, mu=398600.4418, GravModel=:EGM96)
     # Assign degree/order
     n = degree
     m = order
     nidx = n+1; # Accounting for julia indexing shift
     midx = m+1; # Accounting for julia indexing shift
-    # read in coefficients
+
+    # read in coefficients based on model given
     Cfull, Sfull = EGM_coeff_reader(fileloc)
 
     # n, m error check
@@ -59,12 +61,13 @@ function NormalizedGravityModelData(degree, order, fileloc; R=6738.0, mu=398600.
         R,
         mu,
         C,
-        S
+        S,
+        GravModel
     )
 end
 
 """
-    EGM96_coeff_reader
+    EGM_coeff_reader
 File reader designed to read in and organize Cnm and Snm coefficient data for the EGM earth model. Current implementation is designed to read the specific file
     "EGM96_to360.ascii" available at "https://cddis.nasa.gov/926/egm96/getit.html"
 # Inputs: 
@@ -254,9 +257,8 @@ function getSecondPartial(mdl::NormalizedGravityModelData, x::AbstractVector, wa
     Reovr = Re/r
     Reovrn = Reovr
     mu_over_r = mu/r
-    mu_over_r2 = mu_over_r*mu_over_r
-    mu_over_r3 = mu_over_r2*mu_over_r
-
+    mu_over_r2 = mu_over_r / r
+    mu_over_r3 = mu_over_r2 / r
     # C_tilda and S_tilda terms, equation 3-18
     Ctil = Vector{}(undef, nmax) 
     Stil = Vector{}(undef, nmax)
@@ -304,12 +306,14 @@ function getSecondPartial(mdl::NormalizedGravityModelData, x::AbstractVector, wa
         P[nidx, nidx] = sqrt((2*n+1)/(2*n)) * P[nidx-1, nidx-1]
 
         # Initialize m-based summations
-        # done here because some may have values even if mmax = 0
+        # Sums that have a value at m=0:
         sumgam_n = P[nidx, 1] * C[nidx, 1] * (n+1)
-        sumL_n = sumgam_n*(n+2)
+        sumL_n = P[nidx, 1] * C[nidx, 1] * (n+1) * (n+2)
         sumP_n = P[nidx, 2] * C[nidx, 1] * zeta(n,0)
-        sumM_n = P[nidx, 3]
+        sumM_n = P[nidx, 3] * C[nidx, 1] * upsilon(n,0)
         sumH_n = zeta(n, 0) * P[nidx, 2] * C[nidx, 1]
+
+        # Sums that are zero at m=0:
         sumOmega_n = 0.0 
         sumN_n = 0.0
         sumQ_n = 0.0
@@ -348,17 +352,15 @@ function getSecondPartial(mdl::NormalizedGravityModelData, x::AbstractVector, wa
                 sumgam_n = sumgam_n + (n+m+1)*Pnm*Bnmtil
                 sumH_n = sumH_n + P[nidx, midx+1]*Bnmtil*zeta(n, m)
                 sumL_n = sumL_n + (n+m+1)*(n+m+2)*Pnm*Bnmtil
-                
-                sumP_n = sumP_n + P[nidx, midx+1]*(m+n+1)*Bnmtil
-                sumQ_n = sumQ_n + P[nidx, midx+1]*m*(Cnm*Ctil[midx-1] + Snm*Stil[midx-1])
-                sumR_n = sumR_n + P[nidx, midx+1]*m*(Snm*Ctil[midx-1] - Cnm*Stil[midx-1])
+                sumP_n = sumP_n + P[nidx, midx+1]*(m+n+1)*Bnmtil * zeta(n,m)
+                sumQ_n = sumQ_n + P[nidx, midx+1]*m*(Cnm*Ctil[midx-1] + Snm*Stil[midx-1]) * zeta(n,m)
+                sumR_n = sumR_n + P[nidx, midx+1]*m*(Snm*Ctil[midx-1] - Cnm*Stil[midx-1]) * zeta(n,m)
                 sumS_n = sumS_n + Pnm*m*(n+m+1)*(Cnm*Stil[midx-1] - Snm*Ctil[midx-1])
                 sumT_n = sumT_n + Pnm*m*(n+m+1)*(Snm*Ctil[midx-1] - Cnm*Stil[midx-1])
                 
                 # Legendre check for sumM, because of m+2 index (avoiding bounds error) 
                 if midx+2 > size(P,2)
-                    @infiltrate true
-                    sumM_n = sumM_n + 0 * Bnmtil * upsilon(n,m) # P[n,n+1] = 0 by definition, even if we haven't actually calculated out that far
+                    sumM_n = sumM_n + 0 * Bnmtil * upsilon(n,m) # P[n,m>n] = 0 by definition, even if we haven't actually calculated out that far
                 else
                     sumM_n = sumM_n + P[nidx, midx+2] * Bnmtil * upsilon(n,m)
                 end
@@ -406,7 +408,7 @@ function getSecondPartial(mdl::NormalizedGravityModelData, x::AbstractVector, wa
     term1 = hcat(xhat, avec)*FGM*vcat(transpose(xhat), transpose(avec))
 
     # Second added term
-    negI = @SMatrix [0 -1; -1 0]
+    negI = @SMatrix [0 -1; -1 0] # negative transpose of I2x2
     term2 = hcat(xhat, dvec)*negI*vcat(transpose(xhat), transpose(dvec))
 
     # Third added term
@@ -439,7 +441,7 @@ end
 """
     normalized_legendre_generator(n, m, ε)
 -recursively generate all legendre polynomials needed (each is evaluated at ε).
--Note this is currently for testing only, as legendre functions are generated within the getPot methods. This function is an isolated way to generate all
+-Note this is currently for testing only, as legendre functions are generated within the getPartial methods. This function is an isolated way to generate all
  legendre polynomials used throughout the potential partial calculations. Make sure that the matrix P in that function matches the P in this function
  for a given ε.
 """

@@ -21,4 +21,8 @@ end
 println("Acceleration [km/s]:")
 println(g)
 
-getSecondPartial(model, x, want_cf)
+d2U = getSecondPartial(model, x, want_cf);
+
+l2 = datadir("EGM2008_to2190_TideFree")
+mod2 = NormalizedGravityModelData(n, m, l2, R=6378.139, mu=398600.47, GravModel=:EGM2008);
+(g2, ~) = getFirstPartial(mod2, x, want_cf)
