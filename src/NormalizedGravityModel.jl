@@ -3,10 +3,10 @@ Gravitational Force Modeling via harmonics
 Source: Fast Gravity with partials nasa technical doc, 1993. (NASA CR-188243)
 =#
 
-struct NormalizedGravityModelData
+struct NormalizedGravityModel
 
-    n::Int # max degree
-    m::Int # max order
+    degree::Int # max degree "n"
+    order::Int # max order "m"
 
     R::Float64 # Planet average equatorial radius
     mu::Float64 # planet gravitational parameter
@@ -19,22 +19,22 @@ struct NormalizedGravityModelData
 end
 
 """
-    NormalizedGravityModelData(order_and_degree, Cfile, Sfile, R, mu)
+    NormalizedGravityModel(degree, order, fileloc, R, mu)
 Constructor for Normalized Gravity model data. For now, only square models are considered (i.e same degree and order). 
 This model uses normalized coefficients directly.
 
 # Inputs:
-    order_and_degree: integer value of degree and order to calculate to.
-    Cfile: location of cosine coefficients
-    Sfile: location of sine coefficients
+    degree: Integer value for degree
+    order: Integer value for order
+    fileloc: location of coefficient file
     R: planetary radius [km]
     mu: planetary gravitational parameter [km^2/s^3]
-    mod: Symbol for gravity model desired (defaults to EGM96)
+    GravModel: Symbol for gravity model desired (defaults to EGM96)
 
 # Outputs:
-    NormalizedGravityModelData: struct to access all necessary data for gravity potential based calculations
+    NormalizedGravityModel: struct to access all necessary data for gravity potential based calculations
 """
-function NormalizedGravityModelData(degree, order, fileloc; R=6738.0, mu=398600.4418, GravModel=:EGM96)
+function NormalizedGravityModel(degree, order, fileloc; R=6738.0, mu=398600.4418, GravModel=:EGM96)
     # Assign degree/order
     n = degree
     m = order
@@ -55,7 +55,7 @@ function NormalizedGravityModelData(degree, order, fileloc; R=6738.0, mu=398600.
     S = view(Sfull, 1:nidx, 1:midx) 
 
     # Create model
-    NormalizedGravityModelData(
+    NormalizedGravityModel(
         n,
         m,
         R,
@@ -104,21 +104,136 @@ function EGM_coeff_reader(fileloc)
 end
 
 """
-    getFirstPartial(model::NormalizedGravityModelData, x::AbstractVector, wantCentralForce::bool)
+    getPotential(mdl::NormalizedGravityModel, x::AbstractVector, wantCentralForce::Bool)
+"""
+function getPotential(mdl::NormalizedGravityModel, x::AbstractVector, wantCentralForce::Bool)
+    # Pull parameters from model
+    C = mdl.C
+    S = mdl.S
+    mu = mdl.mu
+    Re = mdl.R
+    nmax = mdl.degree
+    mmax = mdl.order
+    nidxmax = nmax+1
+    midxmax = mmax+1
+
+    # Calculate state-based values
+    r = norm(x)
+    Xovr = x[1] / r
+    Yovr = x[2] / r
+    Zovr = x[3] / r
+    ep = Zovr
+
+    # Shorthand values
+    Reovr = Re/r
+    Reovrn = Reovr
+    mu_over_r = mu/r
+
+    # Initialize Summation for the potential, U (mu/r will be multiplied in at end)
+    # Defining V = U/(mu/r)
+    if wantCentralForce
+        sumV = 1.0 
+    else
+        sumV = 0.0
+    end
+
+    # C_tilda and S_tilda terms, equation 3-18
+    Ctil = Vector{}(undef, nidxmax) 
+    Stil = Vector{}(undef, nidxmax)
+    Ctil[1] = 1.0; Ctil[2] = Xovr;
+    Stil[1] = 0.0; Stil[2] = Yovr;
+
+    # Loop to calculate everything else
+    P = Matrix{}(undef, nidxmax, nidxmax)   # initialize array of all legendre functions. n>=m always true, so initialize as nxn to avoid errors with non-square models.
+    #P = zeros(nidxmax, midxmax)
+    P[1,1] = 1.0            # seed recursion with initial values
+    P[1,2] = 0.0
+    P[2,1] = sqrt(3)*ep
+    P[2,2] = sqrt(3)
+
+    for n=2:nmax
+        nidx = n+1
+        Reovrn = Reovrn*Reovr
+
+        # First col. Legendres
+        P[nidx, 1] = xi(n,0)*ep*P[nidx-1, 1] - eta(n,0)*P[nidx-2, 1]
+
+        # inner-diagonal terms
+        deltan = sqrt(2*n+1) * P[nidx-1, nidx-1]                                   
+        P[nidx, nidx-1] = deltan * ep
+        
+        # Diagonal term
+        P[nidx, nidx] = sqrt((2*n+1)/(2*n)) * P[nidx-1, nidx-1]
+
+        # Initialize inner summation (it has a value for m=0)
+        sum_Vn = P[nidx, 1]*C[nidx, 1]
+
+        if mmax > 0
+            for m = 1:n-2
+                midx = m+1 # same deal here with index vs. actual
+                # Calculate all other legendre's in row nidx
+                P[nidx, midx] = xi(n, m)*ep*P[nidx-1, midx] - eta(n, m)*P[nidx-2, midx]
+            end
+
+            # Calculate new Ctilda, Stilda via recursion
+            # Although Ctil/Stil are indexed with m, we can use n here to calculate the current values since m<=n 
+            # This lets us just index Ctil and Stil within the inner loop for each m rather than recalculating each time
+            Ctil[nidx] = Ctil[2] * Ctil[nidx-1] - Stil[2] * Stil[nidx-1]
+            Stil[nidx] = Stil[2] * Ctil[nidx-1] + Ctil[2] * Stil[nidx-1]
+
+            # This statement comes into play if order is less than degree. Only happens for non-square models, (e.g, (40,35), (200,100), etc.)
+            if n < mmax
+                lim = n
+            else
+                lim = mmax
+            end 
+
+            # Inner loop:
+            for m=1:lim
+                midx = m+1
+                # Shorthand terms
+                Pnm = P[nidx, midx]
+                Cnm = C[nidx, midx]
+                Snm = S[nidx, midx]
+                Bnmtil = Cnm*Ctil[midx] + Snm*Stil[midx]
+
+                # inner sum
+                sum_Vn = sum_Vn + Pnm*Bnmtil
+            end
+        end
+
+        # Outer Sum
+        sumV = sumV + Reovrn*sum_Vn
+    end
+
+    # Get potential, remembering V was defined as U/(mu/r)
+    U = sumV * mu_over_r
+            
+    return U
+
+end
+
+"""
+    getFirstPartial(model::NormalizedGravityModel, x::AbstractVector, wantCentralForce::bool)
 returns the gravitational acceleration vector g in earth-fixed coordinates by calculating the first partial of the gravitational potential.
 """
 function getFirstPartial(
-    mdl::NormalizedGravityModelData, # data struct
+    mdl::NormalizedGravityModel, # data struct
     x::AbstractVector, # fixed position vector
     wantCentralForce::Bool # do you want entire potential or just pertubation terms
 )
-    # Point to data in NormalizedGravityModelData
+    # Point to data in NormalizedGravityModel
     Re = mdl.R    # planet radius
     C = mdl.C     # cosine coeffs.
     S = mdl.S     # sine coeffs
-    nmax = mdl.n  # desired degree
-    mmax = mdl.m  # desired order
+    nmax = mdl.degree  # desired degree
+    mmax = mdl.order  # desired order
     mu = mdl.mu   # planet grav. parameter
+
+    # Indexed variables need a size of nmax+1, mmax+1
+    # For example, if n,m = 5,5, the C and S matrices will be 6x6, since n=0,1,2,3... and m=0,1,2,3...
+    nidxmax = nmax+1
+    midxmax = mmax+1
 
 
     # Calculate some initial terms
@@ -133,8 +248,8 @@ function getFirstPartial(
     Reovrn = Reovr              # (Re/r)^n (will be calculated in recursion)
 
     # C_tilda and S_tilda terms, equation 3-18
-    Ctil = Vector{}(undef, nmax) 
-    Stil = Vector{}(undef, nmax)
+    Ctil = Vector{}(undef, nidxmax) 
+    Stil = Vector{}(undef, nidxmax)
     Ctil[1] = 1.0; Ctil[2] = Xovr;
     Stil[1] = 0.0; Stil[2] = Yovr;
 
@@ -146,18 +261,22 @@ function getFirstPartial(
     sumk = 0.0
 
     # Generating associated legendre functions
-    P = zeros(nmax, nmax)   # initialize array of all legendre functions. n>=m always true, so initialize as nxn to avoid errors with non-square models.
+    P = Matrix{}(undef, nidxmax, nidxmax)   # initialize array of all legendre functions. n>=m always true, so initialize as nxn to avoid errors with non-square models.
+    #P = zeros(nidxmax, nidxmax)
     P[1,1] = 1.0            # seed recursion with initial values
     P[1,2] = 0.0
     P[2,1] = sqrt(3)*ep
     P[2,2] = sqrt(3)
 
-    for n = 2:nmax-1
+    for n = 2:nmax
         nidx = n + 1;           # Shift bc julia indexing starts at 1. Note anywhere where n appears in calculation, real n is used, while nidx is only for indexing
         Reovrn = Reovrn*Reovr
 
         # First col. terms
         P[nidx, 1] = xi(n,0)*ep*P[nidx-1, 1] - eta(n,0)*P[nidx-2, 1]
+
+        # Second col. terms
+        P[nidx, 2] = xi(n,1)*ep*P[nidx-1,2] - eta(n,1)*P[nidx-2,2]
 
         # inner-diagonal terms
         deltan = sqrt(2*n+1) * P[nidx-1, nidx-1]    # calculating the delta here. The tech document says delta only depends on n and not the state, 
@@ -182,7 +301,9 @@ function getFirstPartial(
                 P[nidx, midx] = xi(n, m)*ep*P[nidx-1, midx] - eta(n, m)*P[nidx-2, midx]
             end
 
-            # Calculate new Ctilda, Stilda via recursion 
+            # Calculate new Ctilda, Stilda via recursion
+            # Although Ctil/Stil are indexed with m, we can use n here to calculate the current values since m<=n 
+            # This lets us just index Ctil and Stil within the inner loop for each m rather than recalculating each time
             Ctil[nidx] = Ctil[2] * Ctil[nidx-1] - Stil[2] * Stil[nidx-1]
             Stil[nidx] = Stil[2] * Ctil[nidx-1] + Ctil[2] * Stil[nidx-1]
             
@@ -194,7 +315,7 @@ function getFirstPartial(
             end
 
             # Calculate m-based summations (Equations 4-11)
-            for m = 1:lim-1
+            for m = 1:lim
                 midx = m+1
 
                 # Calculate some shorthand terms
@@ -209,7 +330,10 @@ function getFirstPartial(
                 sumK_n = sumK_n + m*Pnm*(Snm*Ctil[midx-1] - Cnm*Stil[midx-1])
 
                 # Sum for Hn is given as below, note only difference from Eq4-11 is multiplication by zeta
-                sumH_n = sumH_n + P[nidx, midx+1]*Bnmtil*zeta(n, m)
+                # Since Hn uses an index of m+1, we can only go up to lim-1 for this term
+                if m < lim
+                    sumH_n = sumH_n + P[nidx, midx+1]*Bnmtil*zeta(n, m)
+                end
 
             end
 
@@ -232,22 +356,27 @@ function getFirstPartial(
     
     dUdx = @SVector [g1; g2; g3]
 
-    return dUdx, P # note remove P as output later, just for testing
+    return dUdx #, P # note remove P as output later, just for testing
 
 end
 
 """
-function getSecondPartial(model::NormalizedGravityModelData, x::AbstractVector, wantCentralForce::Bool)
-    NOT YET WORKING
+    getSecondPartial(model::NormalizedGravityModel, x::AbstractVector, wantCentralForce::Bool)
+# Inputs:
+    model::NormalizedGravityModel: Struct containing data and other variables
+    x::AbstractVector: 3x1 position vector in Earth-fixed frame (ITRF)
+    wantCentralForce::Bool: true if user wants to include the central force, false if user wants pertubation terms only
 """
-function getSecondPartial(mdl::NormalizedGravityModelData, x::AbstractVector, wantCentralForce::Bool)
+function getSecondPartial(mdl::NormalizedGravityModel, x::AbstractVector, wantCentralForce::Bool)
     # Pull data from struct
-    nmax = mdl.n
-    mmax = mdl.m
+    nmax = mdl.degree
+    mmax = mdl.order
     Re = mdl.R
     mu = mdl.mu
     C = mdl.C
     S = mdl.S
+    nidxmax = nmax+1
+    midxmax = mmax+1
 
     # Some initial/shorthand calcs
     r = norm(x)
@@ -260,8 +389,8 @@ function getSecondPartial(mdl::NormalizedGravityModelData, x::AbstractVector, wa
     mu_over_r2 = mu_over_r / r
     mu_over_r3 = mu_over_r2 / r
     # C_tilda and S_tilda terms, equation 3-18
-    Ctil = Vector{}(undef, nmax) 
-    Stil = Vector{}(undef, nmax)
+    Ctil = Vector{}(undef, nidxmax) 
+    Stil = Vector{}(undef, nidxmax)
     Ctil[1] = 1.0; Ctil[2] = Xovr;
     Stil[1] = 0.0; Stil[2] = Yovr;
 
@@ -282,7 +411,7 @@ function getSecondPartial(mdl::NormalizedGravityModelData, x::AbstractVector, wa
     sumH = 0.0
 
     # Initialize legendre functions organized in matrix P
-    P = zeros(nmax, nmax)   # initialize array of all legendre functions. n>=m always true, so initialize as nxn to avoid errors with non-square models.
+    P = zeros(nidxmax, nidxmax)   # initialize array of all legendre functions. n>=m always true, so initialize as nxn to avoid errors with non-square models.
     P[1,1] = 1.0            # seed recursion with initial values
     P[1,2] = 0.0
     P[2,1] = sqrt(3)*ep
@@ -339,7 +468,7 @@ function getSecondPartial(mdl::NormalizedGravityModelData, x::AbstractVector, wa
             else
                 lim = mmax
             end
-            for m = 1:lim-1
+            for m = 1:lim
                 midx = m + 1
 
                 # Define some shorthand terms
@@ -350,13 +479,16 @@ function getSecondPartial(mdl::NormalizedGravityModelData, x::AbstractVector, wa
                 
                 # Summations (Eq 5-10)
                 sumgam_n = sumgam_n + (n+m+1)*Pnm*Bnmtil
-                sumH_n = sumH_n + P[nidx, midx+1]*Bnmtil*zeta(n, m)
                 sumL_n = sumL_n + (n+m+1)*(n+m+2)*Pnm*Bnmtil
-                sumP_n = sumP_n + P[nidx, midx+1]*(m+n+1)*Bnmtil * zeta(n,m)
-                sumQ_n = sumQ_n + P[nidx, midx+1]*m*(Cnm*Ctil[midx-1] + Snm*Stil[midx-1]) * zeta(n,m)
-                sumR_n = sumR_n + P[nidx, midx+1]*m*(Snm*Ctil[midx-1] - Cnm*Stil[midx-1]) * zeta(n,m)
                 sumS_n = sumS_n + Pnm*m*(n+m+1)*(Cnm*Stil[midx-1] - Snm*Ctil[midx-1])
                 sumT_n = sumT_n + Pnm*m*(n+m+1)*(Snm*Ctil[midx-1] - Cnm*Stil[midx-1])
+
+                if m<lim #Avoiding a bounds error
+                    sumP_n = sumP_n + P[nidx, midx+1]*(m+n+1)*Bnmtil * zeta(n,m)
+                    sumQ_n = sumQ_n + P[nidx, midx+1]*m*(Cnm*Ctil[midx-1] + Snm*Stil[midx-1]) * zeta(n,m)
+                    sumR_n = sumR_n + P[nidx, midx+1]*m*(Snm*Ctil[midx-1] - Cnm*Stil[midx-1]) * zeta(n,m)
+                    sumH_n = sumH_n + P[nidx, midx+1]*Bnmtil*zeta(n, m)
+                end
                 
                 # Legendre check for sumM, because of m+2 index (avoiding bounds error) 
                 if midx+2 > size(P,2)
@@ -447,7 +579,7 @@ end
 """
 function normalized_legendre_generator(nmax, mmax, ε)
     # init
-    P = zeros(nmax, nmax)
+    P = zeros(nmax+1, nmax+1)
 
     # Begin recursion
     P[1,1] = 1.0 #P @ n=0, m=0 (index shift for Julia)
@@ -455,7 +587,7 @@ function normalized_legendre_generator(nmax, mmax, ε)
     P[2,2] = sqrt(3)
     P[1,2] = 0.0
 
-    for n=2:nmax-1
+    for n=2:nmax
         nidx = n + 1; # julia indexing starts at 1
         # Compute diagonal term
         P[nidx,nidx] = sqrt((2*n+1)/(2*n)) * P[nidx-1, nidx-1]

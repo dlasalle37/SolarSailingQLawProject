@@ -3,6 +3,7 @@ using DrWatson
 include(srcdir("Includes.jl"))
 import GLMakie as GM
 import GeometryBasics as GB
+using BenchmarkTools
 ## SPICE SETUP
 furnsh(datadir("naif0012.tls"))
 furnsh(datadir("de440.bsp"))
@@ -53,9 +54,8 @@ affect!(integrator) = terminate!(integrator)
 ccb = ContinuousCallback(condition, affect!)
 
 # ====== Run solve function to solve DE
-@time begin # timing the solver only
-    sol = solve(prob, AutoTsit5(Rosenbrock23()),  saveat=60, callback=ccb)
-end
+sol=solve(prob, AutoTsit5(Rosenbrock23()), saveat=60, callback=ccb);
+@btime sol=solve(prob, AutoTsit5(Rosenbrock23()), saveat=60, callback=ccb);
 
 
 print("End Values: ")

@@ -342,7 +342,7 @@ function continuous_callback_errorcheck(x, t, params::QLawParams)
 
 end
 """
-function two_body_eom!: 2Body equations of motion
+two_body_eom!: 2Body equations of motion
     Notes: Only used for plotting initial/target orbits
     INPUTS:
         dx: for inplace-form of diffeq
@@ -357,4 +357,47 @@ function two_body_eom!(dx, x, mu, t)
     r = norm(rvec)
 
     dx[1:6] .= [vvec; -mu/r^3 * rvec]
+end
+
+"""
+    two_body_eom_perturbed!: 2Body equations of motion with pertubations
+    Notes: Only used for plotting initial/target orbits
+    INPUTS:
+        dx: for inplace-form of diffeq
+        x: anonymous state vector:
+        ps::Tuple: list of all parameters
+            -mu: Central body grav. parameter [km/s^2]
+            -fs::FrameSystem containing GCRF and ITRF frames, as well as a Spacecraft point that can be updated
+            -mdl::NormalizedGravityModel: Struct containing all defining terms of gravity model
+        t: anonymous time variable
+"""
+function two_body_eom_perturbed!(dx, x, ps::Tuple, t)
+    # Set some basic terms
+    rvec = x[1:3]
+    vvec = x[4:6]
+
+    r = norm(rvec)
+
+    # Load from parameters
+    mu = ps[1]
+    fs = ps[2] #frame system
+    mdl = ps[3]
+
+    # Update inertial s/c point in FrameSystem
+    update_point!(fs, Spacecraft, x, t)
+
+    # Get Earth-Fixed coords
+    x_fixed = vector6(fs, Earth, Spacecraft, ITRF, t)
+
+    # Create pertubation acceleration vectory by taking the first partial of the gravitational potential, given by mdl
+    #a_perturb = zeros(3,1)
+    a_perturb_fixed = getFirstPartial(mdl, x_fixed, false) # get perturbation from gravity in fixed frame
+
+    # Rotate a_perturb into inertial
+    update_point!(fs, acc, a_perturb_fixed, t)
+    a_perturb = vector3(fs, Earth, acc, GCRF, t)
+
+    a_sum = (-mu/r^3 * rvec) + a_perturb
+
+    dx[1:6] .= [vvec; a_sum]
 end

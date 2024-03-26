@@ -57,9 +57,9 @@ affect!(integrator) = terminate!(integrator)
 ccb = ContinuousCallback(condition, affect!)
 
 # ====== Run solve function to solve DE
-@time begin 
-    sol = solve(prob, AutoTsit5(Rosenbrock23()),  saveat=60, callback=ccb) 
-end
+sol=solve(prob, AutoTsit5(Rosenbrock23()), saveat=60, callback=ccb);
+@btime solve(prob, AutoTsit5(Rosenbrock23()), saveat=60, callback=ccb);
+
 print("End Values: ")
 println(sol.u[end])
 #######################################################################################################################################################
