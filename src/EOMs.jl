@@ -1,7 +1,43 @@
 """
-function augmented_keplerian_varaitions:
-    Stacked Gaussian variational equations for the orbital element set [a, e, i, ω, λ, θ] (defined below)
-INPUTS:
+    keplerian_varational_equations(a, e, i, ω, Ω, θ, mu)
+Stacked Gaussian variational equations for the orbital element set [a, e, i, ω, Ω, θ] (defined below)
+
+# Inputs:
+    a: semi-major axis [km]
+    e: eccentricity
+    i: inclination
+    ω: argument of perigee [rad]
+    Ω: right ascencion of ascending node [rad]
+    θ: true anomaly [rad]
+# Outputs:
+    f0: 6x1 ballistic evolution vector 
+    F: 6x3 Variational matrix to be multiplied with an acceleration (3x1) in the sc-centered orbit frame
+"""
+function keplerian_variational_equations(a, e, i, ω, Ω, θ, mu)
+    p = a*(1-e^2)  # s/c semi-latus [km]
+    r = p/(1+e*cos(θ)) # s/c radial distance from earth [km]
+    h = sqrt(mu*p)  # s/c specific angular momentum [km^2/s]
+    θ_dot = sqrt(mu/a^3)*(1+e*cos(θ))^2 / (1-e^2)^(3/2)
+    f0 = @SVector [0;0;0;0;0; θ_dot]
+    F = 
+    @SArray [
+        2*a^2*e*sin(θ) 2*a^2*p/r 0;
+        p*sin(θ) (p+r)*cos(θ)+r*e 0;
+        0 0 r*cos(θ+ω);
+        -p*cos(θ)/e (p+r)*sin(θ)/e -r*sin(θ+ω)/tan(i);
+        0 0 r*sin(θ+ω)/sin(i);
+        p*cos(θ)/e -(p+r)*sin(θ)/e 0;
+    ]
+    F = F*1/h 
+
+    return f0, F
+end
+
+"""
+    augmented_keplerian_varaitions:
+Stacked Gaussian variational equations for the orbital element set [a, e, i, ω, λ, θ] (defined below)
+
+# INPUTS:
     a: semi-major axis [km]
     e: eccentricity
     i: inclination
@@ -10,9 +46,10 @@ INPUTS:
     θ: true anomaly [rad]
     θ_dot_body: ballistic evolution term of central body (such as earth) on its heliocentric orbit [rad/s]
     mu: gravitational parameter of central body [km^3/s^2]
-OUTPUTS:
-        f0: 6x1 ballistic evolution vector 
-        F: 6x3 Variational matrix to be multiplied with an acceleration (3x1) in the sc-centered orbit frame
+
+# OUTPUTS:
+    f0: 6x1 ballistic evolution vector 
+    F: 6x3 Variational matrix to be multiplied with an acceleration (3x1) in the sc-centered orbit frame
 """
 function augmented_keplerian_varaitions(a, e, i, ω, λ, θ, θ_dot_body, mu)
 
@@ -35,56 +72,21 @@ function augmented_keplerian_varaitions(a, e, i, ω, λ, θ, θ_dot_body, mu)
 
     return f0, F
 end
-"""
 
 """
-function solarSailEOM_cartesian!(dx, x, p, t)
-    #Unpack Parameters and current step values
-        # paramter set p is organized as [mu, ::basicSolarSail, ::TwoBodyEphemeride]
-    mu = p[1]
-    sc = p[2]
-    eph = p[3]
-    epoch = eph.t0
-    rVec = x[1:3]
-    vVec = x[4:6]
-    r = norm(rVec)
+    aSRP
+calculating SRP acceleration in the Hill (Sun centered) frame
 
-    # Compute SRP acceleration
-    # A constant SRP accel for now (for fun!) (export all of this to a calculation function LATER)
-    C1 = sc.C[1]; C2 = sc.C[2]; C3=sc.C[3];
-    A = sc.areaParam
-    nHat = [1; 0; 0]  # sail vector aligned with inertial x
-    G0 = 1.02E14 # [kgkm/s^2]
-    sunDist = 1.46E8
-    (sHat, sunDist) = get_sunlight_direction(epoch+t)  # sHat expressed in ECI frame
-    α = pi - acos(dot(nHat, sHat))  # alpha is the angle b/w the anti-sunlight direction and nHat
-    a_SRP = A*G0/(sunDist^2)*cos(α)*(-(C1*cos(α)+C2)*nHat + C3*sHat)
-
-    # Only thrust in velocity direction
-    if dot(a_SRP, vVec) <= 0
-        α = pi/2
-        a_SRP = A*G0/(sunDist^2)*cos(α)*(-(C1*cos(α)+C2)*nHat + C3*sHat)
-    end
-
-    # EOM
-    dx[1:3] .= vVec
-    dx[4] = -mu/r^3 * rVec[1] + a_SRP[1]
-    dx[5] = -mu/r^3 * rVec[2] + a_SRP[2]
-    dx[6] = -mu/r^3 * rVec[3] + a_SRP[3]
-end
-
-"""
-aSRP: calculating SRP acceleration in the Hill (Sun centered) frame
-Notes:
+# Notes:
     - SRP acceleration vector is calculated in the sun-centered hill frame
-inputs:
+# inputs:
     u: control variables [alpha, beta]
     sc: basicSolarSail
     d: distance to sun
     trueAnom_Earth: earth current true anomaly
 
-outputs:
-    aSRP: SRP acceleration vector in Hill (sun-centered) frame
+# outputs:
+    aSRP: 3x1 SRP acceleration vector in Hill (sun-centered) frame
 """
 function aSRP(u, sc::basicSolarSail, eph::Ephemeride, t)
     # Unpack Inputs:
@@ -143,6 +145,8 @@ function aSRP_orbitFrame(spacecraftState, u, sc::basicSolarSail, eph::Ephemeride
     if method == :Oguri
         lambda = spacecraftState[5]
     elseif method == :Kep
+        coee = getCOE(eph, t)
+        trueAnom_earth = coee[6]
         lambda = spacecraftState[5]-trueAnom_earth
     end
     R_S_O = hill_to_orbit_transform(inc, argPer, lambda, trueAnom)
@@ -164,7 +168,7 @@ function gauss_variational_eqn!(dx, x, params::QLawParams, t)
     sc = params.sc
     u = @SVector [params.alpha; params.beta]  # control inputs, alpha and beta
     eph = params.eph  # ephemeride (contains start date)
-    method = sc.method
+    method = params.method
 
     #Unpack state vector:
     a = x[1]
@@ -220,12 +224,12 @@ function gauss_variational_eqn!(dx, x, params::QLawParams, t)
 end
 
 """
-Function: QLawEOM
-Description:
+    QLawEOM
+# Description:
     Equation of motion with QLaw-calculated control angles
-Inputs: 
+# Inputs: 
     dx: derivative vector (for in-place from)
-    x: state vector (Keplerian orbital elements)
+    x: state vector [semi-major axis, eccentricity, inclination, arg. per., lambda(RAAN Analog from Oguri paper), true anomaly]
     params: QLawParams
     t: time [s]
 """
@@ -286,18 +290,74 @@ function QLawEOM!(dx, x, params::QLawParams, t)
 
     dx[1:6] .= f0 + F*(a_SRP_O); 
 
-    #if (t-eph.t0)/86400 >= 135.0
-    #    @infiltrate false# this is a good point for debugging, set false->true to turn on breakpoint
-    #end
+end
+
+"""
+    QLawEOMKeplerian
+# Description:
+    Equation of motion with QLaw-calculated control angles using a traditional keplerian set of orbital elements.
+# Inputs: 
+    dx: derivative vector (for in-place from)
+    x: state vector (Keplerian orbital elements)
+    params: QLawParams
+    t: time [s]
+"""
+function QLawEOMKeplerian!(dx, x, params::QLawParams, t)
+    
+    # update Time
+    params.current_time = t # current time in ephemeris time [s]
+    # Unpack
+    eph = params.eph # ephemeride struct containing earth's helio position at epoch and epoch time in ephemeris time
+    mu = params.mu
+    a = x[1]
+    e = x[2]
+    inc = x[3]
+    ape = x[4]
+    ran = x[5]
+    tru = x[6]
+    
+    #Check for NaN/Infs in time
+    if isnan(t) || isinf(t)
+        error("Time is $t")
+    end
+
+    # Get Dynamics at current time
+    f0, F = keplerian_variational_equations(a, e, inc, ape, ran, tru, mu)
+
+    # Eclipse Check
+    (r, v) = coe2rv(a, e, inc, ape, ran, tru, mu)
+    if !isEclipsed(eph, r, t)
+        # Compute Control:
+        alphastar, betastar, dQdx = compute_control_kep(x, params)
+        u = @SVector [alphastar; betastar]
+
+        ## Compute derivatives based on control:
+        a_SRP_O = aSRP_orbitFrame(x, u, sc, eph, t);  # SRP acceleration resolved into the O (orbit) frame where O{s/c, er_hat, eθ_hat, eh_hat}
+        
+        # Check Lyapunov function [dQdt should be negative]
+        dQdt = dQdx'*(f0 + F*(a_SRP_O))
+        if  dQdt > 0.0 # If dQdt> 0, it is implied that there is no control to decrease error
+            alphastar = pi/2 # if dQdt>0, zero out SRP acceleration from the sail by setting alpha=90deg
+            a_SRP_O = aSRP_orbitFrame(x, [alphastar; betastar], sc, eph, t);
+            #error("Lyapunov condition (dQdt<0) not met at t=$t. dQdt at this time: $dQdt")
+        end
+
+    else
+        a_SRP_O = @SVector(zeros(3)) # If isEclipsed is true, SRP is zero
+    end
+
+    dx[1:6] .= f0 + F*(a_SRP_O); 
+
 end
 
 """
 callback_function_error_check: function to be called when creating the callback condition
-INPUTS:
+
+# INPUTS:
     u: state passed in by condition function
     t: time passed in by condition functiom
     params: QLaw Params containing the weights and tolerances
-OUTPUTS:
+# OUTPUTS:
     returns true to terminate integration
     returns false to continue integration
 """
@@ -321,11 +381,12 @@ end
 
 """
 continuous_callback_errorcheck: function to be called when creating a continuous callback
-INPUTS:
+
+# INPUTS:
     u: state passed in by condition function
     t: time passed in by condition functiom
     params: QLaw Params containing the weights and tolerances
-OUTPUTS:
+# OUTPUTS:
     ret: maximum of errors, when this reaches zero, the solution has converged
 """
 function continuous_callback_errorcheck(x, t, params::QLawParams)
@@ -342,13 +403,17 @@ function continuous_callback_errorcheck(x, t, params::QLawParams)
 
 end
 """
-two_body_eom!: 2Body equations of motion
-    Notes: Only used for plotting initial/target orbits
-    INPUTS:
-        dx: for inplace-form of diffeq
-        x: anonymous state vector:
-        mu: central body grav. parameter
-        t: anonymous time variable
+    two_body_eom!(dx, x, mu, t)
+2Body equations of motion
+
+# Notes: 
+    Only used for plotting initial/target orbits
+
+# INPUTS:
+    dx: for inplace-form of diffeq
+    x: anonymous state vector:
+    mu: central body grav. parameter
+    t: anonymous time variable
 """
 function two_body_eom!(dx, x, mu, t)
     rvec = x[1:3]
@@ -360,16 +425,20 @@ function two_body_eom!(dx, x, mu, t)
 end
 
 """
-    two_body_eom_perturbed!: 2Body equations of motion with pertubations
-    Notes: Only used for plotting initial/target orbits
-    INPUTS:
-        dx: for inplace-form of diffeq
-        x: anonymous state vector:
-        ps::Tuple: list of all parameters
-            -mu: Central body grav. parameter [km/s^2]
-            -fs::FrameSystem containing GCRF and ITRF frames, as well as a Spacecraft point that can be updated
-            -mdl::NormalizedGravityModel: Struct containing all defining terms of gravity model
-        t: anonymous time variable
+    two_body_eom_perturbed!: 
+2Body equations of motion with pertubations
+    
+# Notes: 
+    Only used for plotting initial/target orbits
+    
+# INPUTS:
+    dx: for inplace-form of diffeq
+    x: anonymous state vector:
+    ps::Tuple: list of all parameters
+    mu: Central body grav. parameter [km/s^2]
+    fs::FrameSystem containing GCRF and ITRF frames, as well as a Spacecraft point that can be updated
+    mdl::NormalizedGravityModel: Struct containing all defining terms of gravity model
+    t: anonymous time variable
 """
 function two_body_eom_perturbed!(dx, x, ps::Tuple, t)
     # Set some basic terms
@@ -397,7 +466,45 @@ function two_body_eom_perturbed!(dx, x, ps::Tuple, t)
     update_point!(fs, acc, a_perturb_fixed, t)
     a_perturb = vector3(fs, Earth, acc, GCRF, t)
 
-    a_sum = (-mu/r^3 * rvec) + a_perturb
+    a_sum = (-mu/r^3 * rvec)# + a_perturb
 
     dx[1:6] .= [vvec; a_sum]
+end
+
+"""
+
+"""
+function solarSailEOM_cartesian!(dx, x, p, t)
+    #Unpack Parameters and current step values
+        # paramter set p is organized as [mu, ::basicSolarSail, ::TwoBodyEphemeride]
+    mu = p[1]
+    sc = p[2]
+    eph = p[3]
+    epoch = eph.t0
+    rVec = x[1:3]
+    vVec = x[4:6]
+    r = norm(rVec)
+
+    # Compute SRP acceleration
+    # A constant SRP accel for now (for fun!) (export all of this to a calculation function LATER)
+    C1 = sc.C[1]; C2 = sc.C[2]; C3=sc.C[3];
+    A = sc.areaParam
+    nHat = [1; 0; 0]  # sail vector aligned with inertial x
+    G0 = 1.02E14 # [kgkm/s^2]
+    sunDist = 1.46E8
+    (sHat, sunDist) = get_sunlight_direction(epoch+t)  # sHat expressed in ECI frame
+    α = pi - acos(dot(nHat, sHat))  # alpha is the angle b/w the anti-sunlight direction and nHat
+    a_SRP = A*G0/(sunDist^2)*cos(α)*(-(C1*cos(α)+C2)*nHat + C3*sHat)
+
+    # Only thrust in velocity direction
+    if dot(a_SRP, vVec) <= 0
+        α = pi/2
+        a_SRP = A*G0/(sunDist^2)*cos(α)*(-(C1*cos(α)+C2)*nHat + C3*sHat)
+    end
+
+    # EOM
+    dx[1:3] .= vVec
+    dx[4] = -mu/r^3 * rVec[1] + a_SRP[1]
+    dx[5] = -mu/r^3 * rVec[2] + a_SRP[2]
+    dx[6] = -mu/r^3 * rVec[3] + a_SRP[3]
 end

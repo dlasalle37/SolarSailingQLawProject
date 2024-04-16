@@ -57,15 +57,10 @@ println(diff2)
 
 # Setup Spacecraft
 date = "2023-01-01T12:30:00" 
-epoch = utc2et(date) 
-X0 = [
-    -2750.0
-    6848.0
-    0.0
-    -7.4732
-    -2.9956
-    1.0805
-]
+epoch = utc2et(date)
+coe0 = [10500.0, 0.150, 25*pi/180, 10.0*pi/180, 30.0*pi/180, 0.0] #[a, e, i, ape, ran, nu]
+(r, v) = coe2rv(coe0[1], coe0[2], coe0[3], coe0[4], coe0[5], coe0[6], mu)
+X0 = [r;v]
 
 #Setup frame FrameTransformations
 mdl = NormalizedGravityModel(n, m, l, R=6378, mu=398600.4418);
@@ -85,9 +80,9 @@ add_point_updatable!(FS, acc, Earth, ITRF) # add a dummy point for the accelerat
 update_point!(FS, acc, [0.0; 0.0; 0.0], epoch)
 
 
-ps = (mu, FS, mdl)
-prob = ODEProblem(two_body_eom_perturbed!, X0, (epoch, epoch+60000), ps, saveat=60)
-sol = solve(prob, abstol=1.0e-12, reltol=1.0e-12)
+ps = (mdl.mu, FS, mdl)
+prob = ODEProblem(two_body_eom_perturbed!, X0, (epoch, epoch+5*86400), ps, saveat=60)
+sol = solve(prob, Vern9(); abstol=1.0e-12, reltol=1.0e-12)
 orb = reduce(hcat, sol.u)
 
 # Plot 3d figure

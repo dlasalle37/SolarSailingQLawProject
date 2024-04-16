@@ -23,6 +23,7 @@ ai = kep(1,1); af = kep(end, 1);
 [T, Xi] = ode45(func, [0 2*pi*sqrt(ai^3/mu)], X0, odeset('reltol', 1.0e-6, 'abstol', 1.0e-6));
 [T, Xf] = ode45(func, [0 2*pi*sqrt(af^3/mu)], XF, odeset('reltol', 1.0e-6, 'abstol', 1.0e-6));
 
+
 % Figure 1 ==========
 figure
 hold on
@@ -44,48 +45,48 @@ hold off
 
 % Figure 2 ==========
 figure
-
 subplot(3, 2, 1)
 plot(t/86400, kep(:,1))
-title("Semi-major axis [km]")
+title("a [km]")
 xlabel("t [days]")
 
 subplot(3, 2, 2)
 plot(t/86400, kep(:,2))
 xlabel("t [days]")
-title("Eccentricity")
+title("e")
 
 subplot(3, 2, 3)
 plot(t/86400, kep(:,3)*180/pi)
 xlabel("t [days]")
-title("Inclination [deg]")
+title("i [deg]")
 
 subplot(3, 2, 4)
 plot(t/86400, kep(:,4)*180/pi)
 xlabel("t [days]")
-title("Arg. perigee [deg]")
+title("\omega [deg]")
 
 subplot(3, 2, 5)
 plot(t/86400, kep(:,5)*180/pi)
 xlabel("t [days]")
-title("RAAN [deg]")
+title("\Omega [deg]")
 
 subplot(3, 2, 6)
 plot(t/86400, kep(:,6)*180/pi)
 xlabel("t [days]")
-title("True anom [deg]")
+title("\nu [deg]")
+
+sgtitle("Orbital Element History")
 
 figure(3)
 subplot(2,1,1)
 plot(t/86400, angles(:,1)*180/pi)
-title("Sail Angles")
 xlabel('Time [days]'); ylabel("Cone angle \alpha [degrees]")
 
 subplot(2,1,2)
 plot(t/86400, angles(:,2)*180/pi)
 xlabel('Time [days]'); ylabel("Clock angle \beta [degrees]")
 
-
+sgtitle("Steering Law")
 
 % figure(4)
 % hold on

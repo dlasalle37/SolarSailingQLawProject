@@ -89,13 +89,17 @@ end
 
 
 """
+    rv2coe(r, v, mu)
+
 Calculate the 6 classical keplerian orbital elements from r, v, mu (under the two body problem)
-INPUTS:
+
+INPUTS:\n
     r: inertial position vector (km)
     v: inertial velocity vector (km/s)
     mu: gravitational parameter of central body (km^3/s^2)
-OUPUTS:
-    coe: tuple of 6 Keplerian elements, which are:
+
+OUPUTS:\n
+    coe: tuple of 6 Keplerian elements, which are:\n
         a: semi major axis (km)
         e: eccentricity
         inc: inclination (radians)
@@ -112,7 +116,7 @@ function rv2coe(r, v, mu)
 
     #Semi-Major
     #From vis-viva:
-    a = (2/r_norm - v_norm^2/mu)^-1;
+    a = 1/(2/r_norm - v_norm^2/mu);
 
     #Eccentricity
     h_vec = cross(r,v); #angular momentum vector

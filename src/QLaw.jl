@@ -1,9 +1,11 @@
 """
-compute_control: function to compute alphastar and betastar at a given instant in time
-inputs: 
+    compute_control
+function to compute alphastar and betastar at a given instant in time
+
+    # inputs: 
     -x: state vector [a, e, inc, ape, lam, tru] w/ units [km, none, rad, rad, rad, rad]
     -params: QLaw Params struct containing all supplementary info
-outputs: 
+# outputs: 
     -alphastar: control variable alpha at given time instant
     -betastar: control variable beta at given time instant
 """
@@ -242,8 +244,10 @@ function calculate_Q(x, params)
 end
 
 """
-oedotnn: calculate the oedotnn term in best-case time-to-go based on nustar_oe
-INPUTS:
+    oedotnn(a, e, inc, ape, lam, tru, nustar_oe, sig_oe, eps_oe, tru_E, nudot, nudot_body, params::QLawParams, t)
+calculate the oedotnn term in best-case time-to-go based on nustar_oe
+
+# INPUTS:
     a: semi-major axis[km]
     e: eccentricity
     inc: inclination [rad]
@@ -255,7 +259,7 @@ INPUTS:
     tru_E: earth true anomaly at time of calculation [rad]
     f0: ballistic evolution vector at time of calculation [rad/s]
     params: QLawParams struct containing supplementary info
-OUTPUT:
+# OUTPUT:
     oedotnn: positive denominator of best-case time-to-go for given element in oe
 """
 function oedotnn(a, e, inc, ape, lam, tru, nustar_oe, sig_oe, eps_oe, tru_E, nudot, nudot_body, params::QLawParams, t)
@@ -276,7 +280,7 @@ function oedotnn(a, e, inc, ape, lam, tru, nustar_oe, sig_oe, eps_oe, tru_E, nud
 
     #oedotnn = sig_oe*eps_oe'*f0 - pvec'*astar_hill # positive denominator of best-case ttg for A
     #sigdoteps = sig_oe*eps_oe'
-    dot_eps_oe_f0 = eps_oe[5]*nudot + eps_oe[6]*nudot_body
+    dot_eps_oe_f0 = eps_oe[5]*-nudot_body + eps_oe[6]*nudot
     oedotnn = sig_oe*dot_eps_oe_f0 - pvec'*astar_hill # positive denominator of best-case ttg for A
 
     return oedotnn
