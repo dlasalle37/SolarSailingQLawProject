@@ -19,15 +19,15 @@ endTime = startTime+simTime
 
 # QLaw Parameter setup
 eph = Ephemeride((startTime, endTime), 1000, 399, 10, "J2000")
-sc = basicSolarSail(;method=:Kep)
+sc = basicSolarSail(;Parameterization=Keplerian)
 coee = getCOE(eph, eph.t0)
 nue = coee[6]
-X0 = [9222.7; 0.20; 0.573*pi/180; 0.00; 2.02+nue; 0.0]  # COE initial conditions [a, e, i, argPer, lamba, trueAnom]
+X0 = [9222.7; 0.20; 0.573*pi/180; 0.00; 1.952; 0.0]  # COE initial conditions [a, e, i, argPer, lamba, trueAnom]
 XT = [26500.0, 0.75, 0.01*pi/180, 0.0*pi/180, 90*pi/180] # Targets # note that targets has 5 elements, while X0 has 6
 oetols = [10, 0.001, 0.01, 0.01, 0.01]
 Woe = [1.0, 1.0, 1.0, 0.0, 0.0]
 params = QLawParams(
-    sc, 
+    sc,
     eph, 
     X0, 
     XT, 
@@ -142,19 +142,19 @@ eP = GM.scatter!(ax, endPoint[1], endPoint[2], endPoint[3], markersize=10.0, col
 ## Create and plot initial/final orbits 
 #Initial:
 mu = params.mu
-X0 = cart[1,:]
+X0cart = cart[1,:]
 a0 = kep[1,1]
 period_initial = 2*pi/sqrt(mu/a0^3)
-prob = ODEProblem(two_body_eom!, X0, (0, period_initial), mu, saveat=60)
+prob = ODEProblem(two_body_eom!, X0cart, (0, period_initial), mu, saveat=60)
 sol2 = solve(prob)
 orb0 = reduce(hcat, sol2.u)
 lin2 = GM.lines!(ax, orb0[1,:], orb0[2,:], orb0[3,:], color=:limegreen, linewidth=2.0)
         
 #Final:
 af = kep[end, 1]
-XF = cart[end, :]
+XFcart = cart[end, :]
 period_final = 2*pi/sqrt(mu/af^3)
-prob = ODEProblem(two_body_eom!, XF, (0, period_final), mu, saveat=60)
+prob = ODEProblem(two_body_eom!, XFcart, (0, period_final), mu, saveat=60)
 sol3 = solve(prob)
 orbF = reduce(hcat, sol3.u)
 lin3 = GM.lines!(ax, orbF[1,:], orbF[2,:], orbF[3,:], color=:red, linewidth=2.0)

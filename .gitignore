@@ -96,6 +96,7 @@ Backup of *.doc*
 
 ## Generated if empty string given at "Please type another file name for output:"
 .pdf
+*.avi
 
 ## Bibliography auxiliary files (bibtex/biblatex/biber):
 *.bbl

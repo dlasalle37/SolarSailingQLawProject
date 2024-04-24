@@ -18,7 +18,7 @@ endTime = startTime+simTime
 
 # QLaw Parameter setup
 eph = Ephemeride((startTime, endTime), 1000, 399, 10, "J2000")
-sc = basicSolarSail(;method=:Kep)
+sc = basicSolarSail(;Parameterization=Keplerian)
 coee = getCOE(eph, eph.t0)
 nue = coee[6]
 X0 = [26500; 0.70; 0.573*pi/180; 0.0; pi/4; 0.0]  # COE initial conditions [a, e, i, argPer, lambda, trueAnom]
@@ -59,7 +59,7 @@ ccb = ContinuousCallback(condition, affect!)
 
 # ====== Run solve function to solve DE
 sol=solve(prob, AutoTsit5(Rosenbrock23()), saveat=60, callback=ccb);
-@btime solve(prob, AutoTsit5(Rosenbrock23()), saveat=60, callback=ccb);
+#@btime solve(prob, AutoTsit5(Rosenbrock23()), saveat=60, callback=ccb);
 
 print("End Values: ")
 println(sol.u[end])

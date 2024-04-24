@@ -23,7 +23,7 @@ XT = [26500.0, 0.75, 0.01*pi/180, 0.0*pi/180, 90*pi/180] # Targets # note that t
 oetols = [10, 0.001, 0.01, 0.01, 0.01]
 Woe = [1.0, 1.0, 1.0, 0.0, 0.0]
 params = QLawParams(
-    sc, 
+    sc,
     eph, 
     X0, 
     XT, 

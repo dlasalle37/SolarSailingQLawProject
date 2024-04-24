@@ -118,23 +118,22 @@ function aSRP(u, sc::basicSolarSail, eph::Ephemeride, t)
 end
 
 """
-Function: aSRP_orbitFrame
-Description:
+    aSRP_orbitFrame
+# Description:
     Calculating the SRP acceleration on the solar sail in the sc-centered orbit (LVLH) frame
-INPUTS:
+# INPUTS:
 spacecraftState: current Keplerian orbital elements of s/c
 u: control vector containing:
     α: cone angle (radians)
     β: clock angle (radians)
-sc: solar sail struct 
+sc::basicSolarSail{Oguri}: solar sail struct 
 eph: Ephemeride struct (sun should be center)
 t: current time in et
-OUTPUTS:
+# OUTPUTS:
 aSRP_oFrame: acceleration vector in the orbit frame [km/s^2]
 """
-function aSRP_orbitFrame(spacecraftState, u, sc::basicSolarSail, eph::Ephemeride, t)
+function aSRP_orbitFrame(spacecraftState, u, sc::basicSolarSail{Oguri}, eph::Ephemeride, t)
     # unpack current state
-    method = sc.method
     inc = spacecraftState[3]; 
     argPer = spacecraftState[4];
     trueAnom = spacecraftState[6];
@@ -142,86 +141,47 @@ function aSRP_orbitFrame(spacecraftState, u, sc::basicSolarSail, eph::Ephemeride
 
     # Now, create rotation matrix from sun frame to orbit frame
     # R_S_0 = R3(trueAnom + argPer)*R1(inc)*R3(lambda)
-    if method == :Oguri
-        lambda = spacecraftState[5]
-    elseif method == :Kep
-        coee = getCOE(eph, t)
-        trueAnom_earth = coee[6]
-        lambda = spacecraftState[5]-trueAnom_earth
-    end
+    lambda = spacecraftState[5]
+    R_S_O = hill_to_orbit_transform(inc, argPer, lambda, trueAnom)
+    aSRP_oFrame = R_S_O * a_S
+    return aSRP_oFrame
+end
+
+"""
+    aSRP_orbitFrame
+# Description:
+    Calculating the SRP acceleration on the solar sail in the sc-centered orbit (LVLH) frame
+# INPUTS:
+spacecraftState: current Keplerian orbital elements of s/c
+u: control vector containing:
+    α: cone angle (radians)
+    β: clock angle (radians)
+sc::basicSolarSail{Keplerian}: solar sail struct 
+eph: Ephemeride struct (sun should be center)
+t: current time in et
+# OUTPUTS:
+aSRP_oFrame: acceleration vector in the orbit frame [km/s^2]
+"""
+function aSRP_orbitFrame(spacecraftState, u, sc::basicSolarSail{Keplerian}, eph::Ephemeride, t)
+    # unpack current state
+    inc = spacecraftState[3]; 
+    argPer = spacecraftState[4];
+    trueAnom = spacecraftState[6];
+    a_S = aSRP(u, sc, eph, t) # hill frame SRP
+
+    # Now, create rotation matrix from sun frame to orbit frame
+    # R_S_0 = R3(trueAnom + argPer)*R1(inc)*R3(lambda)
+    coee = getCOE(eph, t)
+    trueAnom_earth = coee[6]
+    lambda = spacecraftState[5]-trueAnom_earth
+
     R_S_O = hill_to_orbit_transform(inc, argPer, lambda, trueAnom)
     aSRP_oFrame = R_S_O * a_S
     return aSRP_oFrame
 end
 
 
-function gauss_variational_eqn!(dx, x, params::QLawParams, t)
-    #= 
-    Gauss's Variational Equations for the evolution of orbital parameters over time, subject to acceleration
-    INPUTS: ALL ANGLES IN STATE VECTOR SHOULD BE IN RADIANS
 
-    OUTPUTS:
-    =#
-    # unpack parameters:
-    mu_sun = params.mu_sun
-    mu = params.mu
-    sc = params.sc
-    u = @SVector [params.alpha; params.beta]  # control inputs, alpha and beta
-    eph = params.eph  # ephemeride (contains start date)
-    method = params.method
-
-    #Unpack state vector:
-    a = x[1]
-    e = x[2]
-    inc = x[3]
-    argPer = x[4]
-    lambda = x[5]
-    trueAnom = x[6]
-
-    # If eccentricity or inclination would be zero, hold them slightly above (feels crude but necessary)
-    if e <= 1.0E-5
-        e = 1.0E-5
-    end
-    if inc <= 1.0E-5
-        inc = 1.0E-5
-    end
-    state = @SVector [a, e, inc, argPer, lambda, trueAnom]
-    # get the acceleration:
-    # Compute earth coe at current time
-    #nue = get_heliocentric_position(eph, params.current_time) # note, args ideally are (eph, eph.t0+t), but leave it like this for now (approx.same result)
-    coe = getCOE(eph, params.current_time)
-    nue = coe[6] # pull true anomaly
-    ae = coe[1] # pull semi-major axis
-    ee = coe[2] # pull eccentricity
-
-    
-    if params.eclipsed
-        a_SRP_O = @SVector(zeros(3))
-    else
-        a_SRP_O = aSRP_orbitFrame(state, u, sc, eph, t);  # SRP acceleration resolved into the O (orbit) frame where O{s/c, er_hat, eθ_hat, eh_hat}
-    end
-
-    # Calculate some necessary parameters for Gauss's Variational Equations:
-    p = a*(1-e^2)  # s/c semi-latus [km]
-    r = p/(1+e*cos(trueAnom)) # s/c radial distance from earth [km]
-    h = sqrt(mu*p)  # s/c specific angular momentum [km^2/s]
-
-    #Oguri formulation
-    nuDot = sqrt(mu/a^3)*(1+e*cos(trueAnom))^2 / (1-e^2)^(3/2)
-
-    nuDot_earth = sqrt(mu_sun/ae^3)*(1+ee*cos(nue))^2 / (1-ee^2)^(3/2) 
-    
-    if method == :Kep # if the OE set is keplerian
-        f0 = [0;0;0;0;0;nuDot]
-    else
-        f0 = [0;0;0;0; -nuDot_earth; nuDot]
-    end
-    ~, F = augmented_keplerian_varaitions(a, e, inc, argPer, lambda, trueAnom, nuDot_earth, mu)
-
-    dx[1:6] .= f0 + F*(a_SRP_O); 
-
-    #dx[1:6] .= f0 + F*[0; 1E-7; 0] # uncomment to test EOM
-end
 
 """
     QLawEOM
@@ -466,45 +426,8 @@ function two_body_eom_perturbed!(dx, x, ps::Tuple, t)
     update_point!(fs, acc, a_perturb_fixed, t)
     a_perturb = vector3(fs, Earth, acc, GCRF, t)
 
-    a_sum = (-mu/r^3 * rvec)# + a_perturb
+    a_sum = (-mu/r^3 * rvec) + a_perturb
 
     dx[1:6] .= [vvec; a_sum]
 end
 
-"""
-
-"""
-function solarSailEOM_cartesian!(dx, x, p, t)
-    #Unpack Parameters and current step values
-        # paramter set p is organized as [mu, ::basicSolarSail, ::TwoBodyEphemeride]
-    mu = p[1]
-    sc = p[2]
-    eph = p[3]
-    epoch = eph.t0
-    rVec = x[1:3]
-    vVec = x[4:6]
-    r = norm(rVec)
-
-    # Compute SRP acceleration
-    # A constant SRP accel for now (for fun!) (export all of this to a calculation function LATER)
-    C1 = sc.C[1]; C2 = sc.C[2]; C3=sc.C[3];
-    A = sc.areaParam
-    nHat = [1; 0; 0]  # sail vector aligned with inertial x
-    G0 = 1.02E14 # [kgkm/s^2]
-    sunDist = 1.46E8
-    (sHat, sunDist) = get_sunlight_direction(epoch+t)  # sHat expressed in ECI frame
-    α = pi - acos(dot(nHat, sHat))  # alpha is the angle b/w the anti-sunlight direction and nHat
-    a_SRP = A*G0/(sunDist^2)*cos(α)*(-(C1*cos(α)+C2)*nHat + C3*sHat)
-
-    # Only thrust in velocity direction
-    if dot(a_SRP, vVec) <= 0
-        α = pi/2
-        a_SRP = A*G0/(sunDist^2)*cos(α)*(-(C1*cos(α)+C2)*nHat + C3*sHat)
-    end
-
-    # EOM
-    dx[1:3] .= vVec
-    dx[4] = -mu/r^3 * rVec[1] + a_SRP[1]
-    dx[5] = -mu/r^3 * rVec[2] + a_SRP[2]
-    dx[6] = -mu/r^3 * rVec[3] + a_SRP[3]
-end

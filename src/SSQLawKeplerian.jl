@@ -1,5 +1,5 @@
 """
-compute_control: function to compute alphastar and betastar at a given instant in time
+compute_control_kep: function to compute alphastar and betastar at a given instant in time
 inputs: 
     -x: state vector [a, e, inc, ape, ran, tru] w/ units [km, none, rad, rad, rad, rad]
     -params: QLaw Params struct containing all supplementary info
@@ -28,15 +28,6 @@ function compute_control_kep(x, params::QLawParams)
     nue = coee[6]
     lam = ran - nue
 
-    #= Keep inc, e away from zero
-    if e<= 1.0E-4
-        e = 1.0E-4
-        #x[2] = e
-    end
-    if inc <= 1.0E-4
-        inc = 1.0E-4
-    end=#
-
     # DQDX Calculation:
     
     
@@ -44,7 +35,7 @@ function compute_control_kep(x, params::QLawParams)
     
 
     # Comment in this section for ForwardDiff (comment out below section)
-    Q(x) = calculate_Q_kep(x, params,) # defining a unary closure to allow for passage of params into ForwardDiff
+    Q(x) = calculate_Q_kep(x, params) # defining a unary closure to allow for passage of params into ForwardDiff
     cfg = ForwardDiff.GradientConfig(Q, x) # Get the config
     dQdx = ForwardDiff.gradient(Q, x, cfg)
     #dQdx = ForwardDiff.gradient(x->calculate_Q(x, params), x) # this one seems to work instead too

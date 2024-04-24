@@ -24,16 +24,6 @@ function compute_control(x, params::QLawParams)
     C2 = sc.C[2]
     C3 = sc.C[3]
 
- 
-    #= Keep inc, e away from zero
-    if e<= 1.0E-4
-        e = 1.0E-4
-        #x[2] = e
-    end
-    if inc <= 1.0E-4
-        inc = 1.0E-4
-    end=#
-
     # DQDX Calculation:
     
     
@@ -180,15 +170,15 @@ function calculate_Q(x, params)
         # BEST CASE TIME TO GO's
         # Semi-major axis:
         nustar_a = atan(sig_a*se, -sig_a*sp)
-        adotnn = oedotnn(a, e, inc, ape, lam, tru, nustar_a, sig_a, eps_a, tru_E, nudot, nudot_earth, params, t)
+        adotnn = oedotnn(a, e, inc, ape, lam, nustar_a, sig_a, eps_a, nudot, nudot_earth, params, t)
         tau_a = abs(dista)/-adotnn  # best-case ttg term
         
         # Ecccentricity
             # For eccentricity, two edotnn's are computed and compared, smaller is taken and used in Q
         nustar_e1 = 0.5*atan(sig_e*se, -sig_e*sp) + 0*pi
         nustar_e2 = 0.5*atan(sig_e*se, -sig_e*sp) + 1*pi
-        edotnn1 = oedotnn(a, e, inc, ape, lam, tru, nustar_e1, sig_e, eps_e, tru_E, nudot, nudot_earth, params, t)
-        edotnn2 = oedotnn(a, e, inc, ape, lam, tru, nustar_e2, sig_e, eps_e, tru_E,nudot, nudot_earth, params, t)
+        edotnn1 = oedotnn(a, e, inc, ape, lam, nustar_e1, sig_e, eps_e, nudot, nudot_earth, params, t)
+        edotnn2 = oedotnn(a, e, inc, ape, lam, nustar_e2, sig_e, eps_e, nudot, nudot_earth, params, t)
         edotnn = min(edotnn1, edotnn2)
 
         # need to clip edotnn if it is near-zero
@@ -206,7 +196,7 @@ function calculate_Q(x, params)
         
         # Inclination
         nustar_inc = pi/2 - ape + sign(sig_inc*sh)*(asin(e*sin(ape))+pi/2)
-        incdotnn = oedotnn(a, e, inc, ape, lam, tru, nustar_inc, sig_inc, eps_inc, tru_E, nudot, nudot_earth, params, t)
+        incdotnn = oedotnn(a, e, inc, ape, lam, nustar_inc, sig_inc, eps_inc, nudot, nudot_earth, params, t)
         tau_inc = abs(distinc)/-incdotnn
 
         # Argument of periapsis
@@ -222,7 +212,7 @@ function calculate_Q(x, params)
             nustar_ape = nu[argmin(mappedvals)] # the nu that minimized mappedvals is the approx. nustar for ape
 
             # From here, it is the same as the others
-            apedotnn = oedotnn(a, e, inc, ape, lam, tru, nustar_ape, sig_ape, eps_ape, tru_E, nudot, nudot_earth, params, t)
+            apedotnn = oedotnn(a, e, inc, ape, lam, nustar_ape, sig_ape, eps_ape, nudot, nudot_earth, params, t)
             tau_ape = abs(distape)/-apedotnn
         end
 
@@ -231,7 +221,7 @@ function calculate_Q(x, params)
             tau_lam = 0.0
         else # only calculate if Wlam !=0
             nustar_lam = pi - ape + sign(sig_lam*sh/sin(inc))*acos(e*cos(ape))
-            lamdotnn = oedotnn(a, e, inc, ape, lam, tru, nustar_lam, sig_lam, eps_lam, tru_E, nudot, nudot_earth, params, t)
+            lamdotnn = oedotnn(a, e, inc, ape, lam, nustar_lam, sig_lam, eps_lam, nudot, nudot_earth, params, t)
             tau_lam = abs(distlam)/-lamdotnn
         end
 
@@ -262,10 +252,9 @@ calculate the oedotnn term in best-case time-to-go based on nustar_oe
 # OUTPUT:
     oedotnn: positive denominator of best-case time-to-go for given element in oe
 """
-function oedotnn(a, e, inc, ape, lam, tru, nustar_oe, sig_oe, eps_oe, tru_E, nudot, nudot_body, params::QLawParams, t)
+function oedotnn(a, e, inc, ape, lam, nustar_oe, sig_oe, eps_oe, nudot, nudot_body, params::QLawParams, t)
     sc = params.sc
     mu = params.mu
-    mu_sun = params.mu_sun
     eph = params.eph
     R_H_O_star = hill_to_orbit_transform(inc, ape, lam, nustar_oe)
     Foe = F(a, e, inc, ape, nustar_oe, mu)
@@ -279,7 +268,6 @@ function oedotnn(a, e, inc, ape, lam, tru, nustar_oe, sig_oe, eps_oe, tru_E, nud
     astar_hill = aSRP(ustar, sc, eph, t) # SRP accel. evaluated at EOC
 
     #oedotnn = sig_oe*eps_oe'*f0 - pvec'*astar_hill # positive denominator of best-case ttg for A
-    #sigdoteps = sig_oe*eps_oe'
     dot_eps_oe_f0 = eps_oe[5]*-nudot_body + eps_oe[6]*nudot
     oedotnn = sig_oe*dot_eps_oe_f0 - pvec'*astar_hill # positive denominator of best-case ttg for A
 

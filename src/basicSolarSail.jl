@@ -1,12 +1,20 @@
-struct basicSolarSail
-    areaParam::Float64
-    C::Vector{Float64} # contains all 3 (C1, C2, C3) condensed parameters (Default is NASA Nea Scout)
-    accelerationModel::Symbol  # acceleration model to be used; default is FPOF for flat-plate optical force (Model used in Oguri)
-    method::Symbol  # which states will be used? (Oguri for lambda, Kep for regular RAAN)
+# Some type declarations
+abstract type OrbitParameterization              end  # Supertype for different orbit parameterizations
+abstract type Keplerian <: OrbitParameterization end  # Subtype for Keplerian Parameterization [a, e, i, ω, Ω, ν]
+abstract type Oguri     <: OrbitParameterization end  # Subtype for Oguri Parameterization     [a, e, i, ω, λ, ν]
+
+abstract type SRPAccelerationModel        end # Supertype for acceleration models
+abstract type FPOF <:SRPAccelerationModel end # Subtype for flat-plate optical force model
+
+# The basicSolarSail struct
+struct basicSolarSail{T<:OrbitParameterization} 
+    areaParam::Float64          # A/m [km^2/kg]
+    C::Vector{Float64}          # contains all 3 (C1, C2, C3) condensed parameters (Default is NASA NEA Scout)
+    accelerationModel::Symbol   # acceleration model to be used; default is FPOF for flat-plate optical force (Model used in Oguri)
 end
 
 # constructor
-function basicSolarSail(; areaParam=100*5.4E-6, C1=1.711, C2=0.002, C3=0.145, accelerationModel=:FPOF, method=:Oguri)
+function basicSolarSail(; areaParam=100*5.4E-6, C1=1.711, C2=0.002, C3=0.145, accelerationModel=:FPOF, Parameterization=Oguri)
     if (C1==0) && (C2==0)
         error("Check sail parameters, C1 and C2 cannot both be zero")
     elseif !(0<=C1<=2) || !(0<=C2<=1)
@@ -16,30 +24,5 @@ function basicSolarSail(; areaParam=100*5.4E-6, C1=1.711, C2=0.002, C3=0.145, ac
     condensedParams = [C1,C2,C3]
 
     # Create struct
-    basicSolarSail(areaParam, condensedParams, accelerationModel, method)
+    basicSolarSail{Parameterization}(areaParam, condensedParams, accelerationModel)
 end
-
-"""
-Depreciated
-"""
-function calculate_sail_constants(ρ, s, ϵf, ϵb, Bf, Bb)
-    #= 
-    This function executes in the constructor.
-    Uses the sail parameters to calculate the condensed parameters C1, C2, C3
-    Formulation discussed in Solar Sailing Primer Vector Theory: Indirect Trajectory
-    Optimization with Practical Mission Considerations by Oguri, McMahon, Lantoine.
-    =#
-
-    C1 = 2*ρ*s
-    C3 = 1-ρ*s
-    C2 = Bf*ρ*(1-s)+(1-ρ)*(Bf*ϵf-Bb*ϵb)/(ϵf+ϵb)
-
-    if (C1==0) && (C2==0)
-        error("Check sail parameters, C1 and C2 cannot both be zero")
-    elseif !(0<=C1<=2) || !(0<=C2<=1)
-        error("Values out of bounds. C1∈[0,2] and C2∈[0,1]")
-    end
-    return C1, C2, C3
-end
-
-
