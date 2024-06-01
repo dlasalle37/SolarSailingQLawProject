@@ -1,4 +1,10 @@
-mutable struct QLawParams
+# Type declarations
+abstract type QLawType end
+abstract type Keplerian <: QLawType end
+abstract type Oguri     <: QLawType end 
+
+# Q-Law Parameters Struct
+mutable struct QLawParams{T<:QLawType}
     # Basic Parameters
     sc::basicSolarSail
     eph::Ephemeride
@@ -85,7 +91,8 @@ function QLawParams(
     max_sim_time = 100*86400.0, # seconds (days*sec/day)
     abstol=1.0E-6,
     reltol=1.0E-6,
-    writeData=true
+    writeData=true,
+    type=Oguri
 )
     current_time = eph.t0
 
@@ -95,7 +102,7 @@ function QLawParams(
     (r, ~) = coe2rv(oe0[1], oe0[2], oe0[3], oe0[4], oe0[5]+nue, oe0[6], mu)
     eclipsed = isEclipsed(eph, r, current_time)
 
-    qlawparam = QLawParams(sc, eph, mu, mu_sun, current_time, alpha, beta, eclipsed, oe0, oet, oeTols, Woe, Wp, 
+    qlawparam = QLawParams{type}(sc, eph, mu, mu_sun, current_time, alpha, beta, eclipsed, oe0, oet, oeTols, Woe, Wp, 
         Aimp, kimp, Aesc, kesc, rp_min, a_esc, m_petro, n_petro, r_petro, alpha_min, alpha_max, beta_min, beta_max, step_size, max_sim_time, abstol, reltol,
         writeData)
 

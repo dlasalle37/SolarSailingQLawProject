@@ -82,8 +82,8 @@ calculating SRP acceleration in the Hill (Sun centered) frame
 # inputs:
     u: control variables [alpha, beta]
     sc: basicSolarSail
-    d: distance to sun
-    trueAnom_Earth: earth current true anomaly
+    eph: ephemeride
+    t: ephemeris time [s]
 
 # outputs:
     aSRP: 3x1 SRP acceleration vector in Hill (sun-centered) frame
@@ -126,13 +126,14 @@ spacecraftState: current Keplerian orbital elements of s/c
 u: control vector containing:
     α: cone angle (radians)
     β: clock angle (radians)
-sc::basicSolarSail{Oguri}: solar sail struct 
+ps::QLawParams{Oguri}: QLaw parameters containing type info and solar sail struct 
 eph: Ephemeride struct (sun should be center)
 t: current time in et
 # OUTPUTS:
 aSRP_oFrame: acceleration vector in the orbit frame [km/s^2]
 """
-function aSRP_orbitFrame(spacecraftState, u, sc::basicSolarSail{Oguri}, eph::Ephemeride, t)
+function aSRP_orbitFrame(spacecraftState, u, ps::QLawParams{Oguri}, eph::Ephemeride, t)
+    sc = ps.sc
     # unpack current state
     inc = spacecraftState[3]; 
     argPer = spacecraftState[4];
@@ -162,7 +163,8 @@ t: current time in et
 # OUTPUTS:
 aSRP_oFrame: acceleration vector in the orbit frame [km/s^2]
 """
-function aSRP_orbitFrame(spacecraftState, u, sc::basicSolarSail{Keplerian}, eph::Ephemeride, t)
+function aSRP_orbitFrame(spacecraftState, u, ps::QLawParams{Keplerian}, eph::Ephemeride, t)
+    sc = ps.sc
     # unpack current state
     inc = spacecraftState[3]; 
     argPer = spacecraftState[4];
@@ -193,7 +195,7 @@ end
     params: QLawParams
     t: time [s]
 """
-function QLawEOM!(dx, x, params::QLawParams, t)
+function QLawEOM!(dx, x, params::QLawParams{Oguri}, t)
     
     # update Time
     params.current_time = t # current time in ephemeris time [s]
@@ -234,13 +236,13 @@ function QLawEOM!(dx, x, params::QLawParams, t)
         u = @SVector [alphastar; betastar]
 
         ## Compute derivatives based on control:
-        a_SRP_O = aSRP_orbitFrame(x, u, sc, eph, t);  # SRP acceleration resolved into the O (orbit) frame where O{s/c, er_hat, eθ_hat, eh_hat}
+        a_SRP_O = aSRP_orbitFrame(x, u, params, eph, t);  # SRP acceleration resolved into the O (orbit) frame where O{s/c, er_hat, eθ_hat, eh_hat}
         
         # Check Lyapunov function [dQdt should be negative]
         dQdt = dQdx'*(f0 + F*(a_SRP_O))
         if  dQdt > 0.0 # If dQdt> 0, it is implied that there is no control to decrease error
             alphastar = pi/2 # if dQdt>0, zero out SRP acceleration from the sail by setting alpha=90deg
-            a_SRP_O = aSRP_orbitFrame(x, [alphastar; betastar], sc, eph, t);
+            a_SRP_O = aSRP_orbitFrame(x, [alphastar; betastar], params, eph, t);
             #error("Lyapunov condition (dQdt<0) not met at t=$t. dQdt at this time: $dQdt")
         end
 
@@ -262,7 +264,7 @@ end
     params: QLawParams
     t: time [s]
 """
-function QLawEOMKeplerian!(dx, x, params::QLawParams, t)
+function QLawEOM!(dx, x, params::QLawParams{Keplerian}, t)
     
     # update Time
     params.current_time = t # current time in ephemeris time [s]
@@ -288,17 +290,17 @@ function QLawEOMKeplerian!(dx, x, params::QLawParams, t)
     (r, v) = coe2rv(a, e, inc, ape, ran, tru, mu)
     if !isEclipsed(eph, r, t)
         # Compute Control:
-        alphastar, betastar, dQdx = compute_control_kep(x, params)
+        alphastar, betastar, dQdx = compute_control(x, params)
         u = @SVector [alphastar; betastar]
 
         ## Compute derivatives based on control:
-        a_SRP_O = aSRP_orbitFrame(x, u, sc, eph, t);  # SRP acceleration resolved into the O (orbit) frame where O{s/c, er_hat, eθ_hat, eh_hat}
+        a_SRP_O = aSRP_orbitFrame(x, u, params, eph, t);  # SRP acceleration resolved into the O (orbit) frame where O{s/c, er_hat, eθ_hat, eh_hat}
         
         # Check Lyapunov function [dQdt should be negative]
         dQdt = dQdx'*(f0 + F*(a_SRP_O))
         if  dQdt > 0.0 # If dQdt> 0, it is implied that there is no control to decrease error
             alphastar = pi/2 # if dQdt>0, zero out SRP acceleration from the sail by setting alpha=90deg
-            a_SRP_O = aSRP_orbitFrame(x, [alphastar; betastar], sc, eph, t);
+            a_SRP_O = aSRP_orbitFrame(x, [alphastar; betastar], params, eph, t);
             #error("Lyapunov condition (dQdt<0) not met at t=$t. dQdt at this time: $dQdt")
         end
 
@@ -386,10 +388,10 @@ end
 
 """
     two_body_eom_perturbed!: 
-2Body equations of motion with pertubations
+2Body equations of motion with pertubations due to nonspherical gravity
     
 # Notes: 
-    Only used for plotting initial/target orbits
+    Only used for plotting initial/target orbits or testing
     
 # INPUTS:
     dx: for inplace-form of diffeq
@@ -425,6 +427,41 @@ function two_body_eom_perturbed!(dx, x, ps::Tuple, t)
     # Rotate a_perturb into inertial
     update_point!(fs, acc, a_perturb_fixed, t)
     a_perturb = vector3(fs, Earth, acc, GCRF, t)
+
+    a_sum = (-mu/r^3 * rvec) + a_perturb
+
+    dx[1:6] .= [vvec; a_sum]
+end
+
+"""
+    two_body_eom_perturbed_tb!: 
+2Body equations of motion with pertubations due to third body perturbations
+    
+# Notes: 
+    Only used for plotting initial/target orbits or testing
+    
+# INPUTS:
+    dx: for inplace-form of diffeq
+    x: anonymous state vector:
+    ps::Tuple: list of all parameters
+    mu: Central body grav. parameter [km/s^2]
+    fs::FrameSystem containing GCRF and ITRF frames, as well as a Spacecraft point that can be updated
+    mdl::NormalizedGravityModel: Struct containing all defining terms of gravity model
+    t: anonymous time variable
+"""
+function two_body_eom_perturbed_tb!(dx, x, ps::Tuple, t)
+    # Set some basic terms
+    rvec = x[1:3]
+    vvec = x[4:6]
+
+    r = norm(rvec)
+
+    # Load from parameters
+    mu = ps[1]
+    eph = ps[2]
+    thirdbody = ps[3]
+
+    a_perturb = third_body_perturb(rvec, t, eph, thirdbody)
 
     a_sum = (-mu/r^3 * rvec) + a_perturb
 

@@ -1,7 +1,7 @@
 using DrWatson
 @quickactivate "SolarSailingQLawProject"
 include(srcdir("Includes.jl"))
-include(srcdir("SSQLawKeplerian.jl"))
+#include(srcdir("SSQLawKeplerian.jl"))
 import GLMakie as GM
 import GeometryBasics as GB
 
@@ -18,7 +18,7 @@ endTime = startTime+simTime
 
 # QLaw Parameter setup
 eph = Ephemeride((startTime, endTime), 1000, 399, 10, "J2000")
-sc = basicSolarSail(;Parameterization=Keplerian)
+sc = basicSolarSail()
 coee = getCOE(eph, eph.t0)
 nue = coee[6]
 X0 = [26500; 0.70; 0.573*pi/180; 0.0; pi/4; 0.0]  # COE initial conditions [a, e, i, argPer, lambda, trueAnom]
@@ -37,14 +37,15 @@ params = QLawParams(
     max_sim_time = simTime,
     step_size = 60.0,
     writeData=true,
-    kimp=100
+    kimp=100,
+    type=Keplerian
     )
 
 # ======= Integrator Setup
 abstol = 1.0E-6
 reltol = 1.0E-6
 tspan = (startTime, endTime)
-prob = ODEProblem(QLawEOMKeplerian!, X0, tspan, params, abstol=abstol, reltol=reltol)
+prob = ODEProblem(QLawEOM!, X0, tspan, params, abstol=abstol, reltol=reltol)
 
 # ======= Callback Setups for Integrator:
 # ======= To use a Discrete callback, comment in this block
