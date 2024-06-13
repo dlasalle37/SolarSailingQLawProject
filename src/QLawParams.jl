@@ -55,6 +55,9 @@ mutable struct QLawParams{T<:QLawType}
     abstol::Float64
     reltol::Float64
 
+    # Frame system
+    frame_system::FrameSystem
+
     # Writing data
     writeData::Bool
 
@@ -67,7 +70,8 @@ function QLawParams(
     eph::Ephemeride,
     oe0,
     oet,
-    oeTols; ### MANDATORY INPUTS END HERE ###
+    oeTols,
+    FS::FrameSystem; ### MANDATORY INPUTS END HERE ###
     mu::Float64=GRAV_PARAMS[399], #Defaults to earth
     mu_sun::Float64=GRAV_PARAMS[10], #helpful to carry this around, not totally necessary
     Woe::Vector{Float64}=[1.0; 1.0; 1.0; 1.0; 1.0],
@@ -93,7 +97,8 @@ function QLawParams(
     reltol=1.0E-6,
     writeData=true,
     type=Oguri
-)
+    )
+
     current_time = eph.t0
 
     # Find out if initial conditions are eclipsed
@@ -104,7 +109,7 @@ function QLawParams(
 
     qlawparam = QLawParams{type}(sc, eph, mu, mu_sun, current_time, alpha, beta, eclipsed, oe0, oet, oeTols, Woe, Wp, 
         Aimp, kimp, Aesc, kesc, rp_min, a_esc, m_petro, n_petro, r_petro, alpha_min, alpha_max, beta_min, beta_max, step_size, max_sim_time, abstol, reltol,
-        writeData)
+        FS, writeData)
 
     return qlawparam
 end

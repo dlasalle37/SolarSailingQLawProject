@@ -14,6 +14,7 @@ using DelimitedFiles
 using Infiltrator
 using DiffEqCallbacks
 using SparseArrays: SparseMatrixCSC, spzeros
+using FrameTransformations
 
 #Includes
 include("constants.jl")
@@ -26,5 +27,6 @@ include("EOMs.jl")
 include("QLaw.jl")
 include("QLawIntegrator.jl")
 include("NormalizedGravityModel.jl")
+include("LineSearch.jl")
 
 # Setups

@@ -16,6 +16,22 @@ startTime = utc2et(date)  # start date in seconds past j2000
 simTime = 55*86400 # amount of time [s] to simulate for
 endTime = startTime+simTime
 
+# ======= Frame System Setup
+Orient.init_eop(datadir("iau2000a.eop.dat"))
+FS = FrameSystem{4, Float64}()
+@axes GCRF 1 GeocentricCelestialReferenceFrame
+@axes ITRF 6 InternationalTerrestrialReferenceFrame
+@point Earth 399
+@point Spacecraft -1_900_000
+@point acc -1_999_999
+add_axes_inertial!(FS, GCRF)
+add_point_root!(FS, Earth, GCRF)
+add_axes_itrf!(FS, ITRF, GCRF) # adding the Earth-fixed reference
+add_point_updatable!(FS, Spacecraft, Earth, GCRF) # adding the spacecraft as an updateable point in inertial coords
+# update_point!(FS, Spacecraft, X0, epoch)
+add_point_updatable!(FS, acc, Earth, ITRF) # add a dummy point for the acceleration to rotate it later
+update_point!(FS, acc, [0.0; 0.0; 0.0], startTime)
+
 # QLaw Parameter setup
 eph = Ephemeride((startTime, endTime), 1000, 399, 10, "J2000")
 sc = basicSolarSail()
@@ -30,7 +46,8 @@ params = QLawParams(
     eph, 
     X0, 
     XT, 
-    oetols, 
+    oetols,
+    FS,
     Woe=Woe,
     rp_min=6578.0,
     a_esc=1.0E5,

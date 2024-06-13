@@ -466,6 +466,7 @@ function calculate_Q(x, params::QLawParams{Keplerian})
 
         # From here, it is the same as the others
         apedotnn = oedotnn(a, e, inc, ape, lam, nustar_ape, sig_ape, eps_ape, nudot, params, t)
+        #~, apedotnn = gss(nu->oedotnn(a, e, inc, ape, lam, nu, sig_ape, eps_ape, nudot, params, t), 0, 2*pi)
         tau_ape = abs(distape)/-apedotnn
     end
 
@@ -547,6 +548,48 @@ calculate the oedotnn term in best-case time-to-go based on nustar_oe
     oedotnn: positive denominator of best-case time-to-go for given element in oe
 """
 function oedotnn(a, e, inc, ape, lam, nustar_oe, sig_oe, eps_oe, nudot, params::QLawParams{Keplerian}, t)
+    sc = params.sc
+    mu = params.mu
+    eph = params.eph
+    R_H_O_star = hill_to_orbit_transform(inc, ape, lam, nustar_oe)
+    Foe = F(a, e, inc, ape, nustar_oe, mu)
+    pvec = -transpose(sig_oe*eps_oe'*Foe*R_H_O_star);
+    py = pvec[2] 
+    pz = pvec[3]
+    betastar = atan(-py, -pz)
+    alphastar = calculate_alpha_star(pvec, sc)
+    alphastar = median([params.alpha_min, alphastar, params.alpha_max]) # enforcing alphastar range constraint
+    ustar = @SVector [alphastar; betastar]  # elementwise optimal control (EOC)
+    astar_hill = aSRP(ustar, sc, eph, t) # SRP accel. evaluated at EOC
+
+    #oedotnn = sig_oe*eps_oe'*f0 - pvec'*astar_hill # positive denominator of best-case ttg for A
+    dot_eps_oe_f0 = eps_oe[6]*nudot 
+    oedotnn = sig_oe*dot_eps_oe_f0 - pvec'*astar_hill # positive denominator of best-case ttg for A
+
+    return oedotnn
+end
+
+"""
+    oedotnn(a, e, inc, ape, lam, tru, nustar_oe, sig_oe, eps_oe, tru_E, nudot, nudot_body, params::QLawParams{Keplerian}, t)
+calculate the oedotnn term in best-case time-to-go based on nustar_oe
+
+# INPUTS:
+    a: semi-major axis[km]
+    e: eccentricity
+    inc: inclination [rad]
+    ape: arg. periapsis [rad]
+    lam: RAAN - tru_e [rad]
+    nustar_oe: optimal true anomaly for element in oe
+    sig_oe: sigma function for element in oe
+    eps_oe: selection vector for given element in oe (e.g. [0 1 0 0 0 0] for e)
+    tru_E: earth true anomaly at time of calculation [rad]
+    f0: ballistic evolution vector at time of calculation [rad/s]
+    params: QLawParams{Keplerian} struct containing supplementary info
+# OUTPUT:
+    oedotnn: positive denominator of best-case time-to-go for given element in oe
+"""
+function oedotnn_j2(a, e, inc, ape, lam, nustar_oe, sig_oe, eps_oe, nudot, params::QLawParams{Keplerian}, t)
+    FS = params.frame_system
     sc = params.sc
     mu = params.mu
     eph = params.eph

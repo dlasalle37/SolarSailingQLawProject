@@ -9,6 +9,11 @@ furnsh(datadir("naif0012.tls"))
 furnsh(datadir("de440.bsp"))
 ## END SPICE SETUP
 
+# ====== SELECT CASE
+CASE_ID = "A"   # Current cases: A-G
+include("TestCase_info.jl") # file that includes the test case selector function
+
+
 # Simulation time setup:
 date = "2023-01-01T12:30:00" 
 startTime = utc2et(date)  # start date in seconds past j2000
@@ -33,25 +38,22 @@ update_point!(FS, acc, [0.0; 0.0; 0.0], startTime)
 
 # ======= QLaw Parameter setup
 eph = Ephemeride((startTime, endTime), 1000, 399, 10, "J2000")
-sc = basicSolarSail()
-X0 = [9222.7; 0.20; 0.573*pi/180; 0.00; 2.02; 0.0]  # COE initial conditions [a, e, i, argPer, lamba, trueAnom]
-XT = [26500.0, 0.75, 0.01*pi/180, 0.0*pi/180, 90*pi/180] # Targets # note that targets has 5 elements, while X0 has 6
-oetols = [10, 0.001, 0.01, 0.01, 0.01]
-Woe = [1.0, 1.0, 1.0, 0.0, 0.0]
+sc, X0, XT, oetols, Woe, qlawType = testcase(CASE_ID)
 params = QLawParams(
     sc,
     eph, 
     X0, 
     XT, 
-    oetols, 
-    FS,
+    oetols,
+    FS, 
     Woe=Woe,
     rp_min=6578.0,
     a_esc=1.0E5,
     max_sim_time = simTime,
     step_size = 60.0,
     kimp=100,
-    writeData=true
+    writeData=true,
+    type=qlawType
     )
 
 # ======= Integrator Setup
@@ -71,8 +73,9 @@ affect!(integrator) = terminate!(integrator)
 ccb = ContinuousCallback(condition, affect!)
 
 # ====== Run solve function to solve DE
-sol=solve(prob, AutoTsit5(Rosenbrock23()), saveat=60, callback=ccb);
 @btime sol=solve(prob, AutoTsit5(Rosenbrock23()), saveat=60, callback=ccb);
+sol=solve(prob, AutoTsit5(Rosenbrock23()), saveat=60, callback=ccb);
+
 
 
 print("End Values: ")
@@ -257,8 +260,6 @@ GM.lines!(axape, t/86400, kep[:,4]*180/pi)
 GM.lines!(axlam, t/86400, lambda*180/pi)
 GM.lines!(axRAN, t/86400, kep[:,5]*180/pi)
 GM.lines!(axtru, t/86400, kep[:,6]*180/pi)
-
-
 
 
 # Unload Kernels
