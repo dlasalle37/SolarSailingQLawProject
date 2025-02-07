@@ -28,3 +28,7 @@ using DrWatson
 @quickactivate "SolarSailingQLawProject"
 ```
 which auto-activate the project and enable local path handling from DrWatson.
+
+You will need to install the following kernels and store them in a `data` directory on the same level as the `src` folder.
+1. [naif0012.tls](https://naif.jpl.nasa.gov/pub/naif/generic_kernels/lsk/naif0012.tls)
+2. [de440.bsp](https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/)
