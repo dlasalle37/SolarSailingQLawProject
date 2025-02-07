@@ -314,3 +314,15 @@ function coe_to_mee(a, e, i, ω, Ω, θ)
     L = ω + Ω + θ
     return p, f, g, h, k, L
 end
+
+"""
+    sign_smooth(x, k)
+Hyperbolic tangent approximation for the sign() function. 
+
+# arguments
+`x`: switching variable
+`k`: hyperbolic tangent sharpness parameter
+"""
+function sign_smooth(x, k)
+    return tanh(k*x)
+end
