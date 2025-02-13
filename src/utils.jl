@@ -284,3 +284,45 @@ function get_mean_radius(id)
     r = CELESTIAL_RADII[id]
     return r
 end
+
+
+"""
+    mee_to_coe(p, f, g, h, k, L)
+Converts modified equinoctial elements to classical orbital elements
+"""
+function mee_to_coe(p, f, g, h, k, L)
+    a = p/(1-f^2-g^2)
+    e = sqrt(f^2+g^2)
+    i = atan(2*sqrt(h^2+k^2), 1-h^2-k^2)
+    ω = atan(g*h-f*k, f*h+g*k)
+    Ω = atan(k, h)
+    θ = L - Ω - ω
+    return a, e, i, ω, Ω, θ
+end
+
+
+"""
+    coe_to_mee(a, e, i, ω, Ω, θ)
+Converts classical orbital elements to modified equinoctial elements
+"""
+function coe_to_mee(a, e, i, ω, Ω, θ)
+    p = a*(1-e^2)
+    f = e*cos(ω+Ω)
+    g = e*sin(ω+Ω)
+    h = tan(i/2)*cos(Ω)
+    k = tan(i/2)*sin(Ω)
+    L = ω + Ω + θ
+    return p, f, g, h, k, L
+end
+
+"""
+    sign_smooth(x, k)
+Hyperbolic tangent approximation for the sign() function. 
+
+# arguments
+`x`: switching variable
+`k`: hyperbolic tangent sharpness parameter
+"""
+function sign_smooth(x, k)
+    return tanh(k*x)
+end

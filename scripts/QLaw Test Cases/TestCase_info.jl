@@ -3,9 +3,9 @@ function testcase(id)
         sc = basicSolarSail()                                       # Spacecraft struct
         X0 = [9222.7; 0.20; 0.573*pi/180; 0.00; 2.02; 0.0]          # Initial conditions
         XT = [26500.0, 0.75, 0.01*pi/180, 0.0*pi/180, 90*pi/180]    # Targets
-        oetols = [10, 0.001, 0.01, 0.01, 0.01]                      # Weights
-        Woe = [1.0, 1.0, 1.0, 0.0, 0.0]                             # Parameterization Type
-        qlaw_type = Oguri 
+        oetols = [10, 0.001, 0.01, 0.01, 0.01]                      # Tols
+        Woe = [1.0, 1.0, 1.0, 0.0, 0.0]                             # Weights
+        qlaw_type = Oguri                                           # Parameterization Type
     elseif id == "B"
         sc = basicSolarSail()
         X0 = [9222.7; 0.20; 0.573*pi/180; 0.00; 2.02; 0.0]

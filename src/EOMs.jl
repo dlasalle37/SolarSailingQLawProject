@@ -468,3 +468,38 @@ function two_body_eom_perturbed_tb!(dx, x, ps::Tuple, t)
     dx[1:6] .= [vvec; a_sum]
 end
 
+"""
+    modified_equinoctal_variations!(dx, x, mu, t)
+
+"""
+function modified_equinoctal_variations(p, f, g, h, k, L, μ)
+    # Supplementary terms
+    w = 1 + f*cos(L) + g*sin(L)
+    s = sqrt(1+h^2+k^2)
+    c = sqrt(p/μ)
+
+    # State Matrices
+    A_mee = SA[0;0;0;0;0;sqrt(μ*p)*(w/p)^2]
+
+    Cpt = 2*p/w
+    Cfr = sin(L)
+    Cft = 1/w*((w+1)*cos(L)+f)
+    Cfn = -g/w*(h*sin(L)-k*cos(L))
+    Cgr = -cos(L)
+    Cgt = 1/w*((w+1)*sin(L)+g)
+    Cgn = g/w*(h*sin(L)-k*cos(L))
+    Chn = s^2*cos(L)/(2*w)
+    Ckn = s^2*sin(L)/(2*w)
+    CLn = 1/w*(h*sin(L)-k*cos(L))
+    
+    B_mee = c*SA[
+        0 Cpt 0; 
+        Cfr Cft Cfn; 
+        Cgr Cgt Cgn; 
+        0 0 Chn; 
+        0 0 Ckn; 
+        0 0 CLn
+    ]
+
+    return A_mee, B_mee
+end

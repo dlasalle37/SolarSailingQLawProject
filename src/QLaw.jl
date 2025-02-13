@@ -666,27 +666,181 @@ function F(a, e, i, ω, θ, mu)
     return out
 end
 
-#=============== OLD
 """
-This is a function for debugging
-    analytical partial for penalty wrt eccentricity
-"""
-function analytical_dPde(e, a, params::QLawParams)
-    kimp = params.kimp
-    Aimp = params.Aimp
-    rpmin = params.rp_min
-    dPde = kimp*a/rpmin * Aimp*exp(kimp * (1-a*(1-e)/rpmin))
+    calculate_Q(x, params::QLawParams{Keplerian})
 
+Calculate the proximity quotient, Q
+
+# Inputs
+    - x: state vector [a, e, i, ω, Ω, ν]
+    - params::QLawParams{Keplerian}: parameter struct
+"""
+function calculate_Q_smooth(x, params::QLawParams{Oguri})
+
+        # Unpack inputs
+        a = x[1]
+        e = x[2]
+        inc = x[3]
+        ape = x[4]
+        lam = x[5]
+        tru = x[6]
+        
+        ## Unpack parameters
+        # Basic params
+        mu = params.mu
+        mu_sun = params.mu_sun
+        rpmin = params.rp_min
+        aesc = params.a_esc
+        t = params.current_time
+
+        # Scaling terms
+        mpet = params.m_petro
+        rpet = params.r_petro
+        npet = params.n_petro
+
+        # Targets
+        oet = params.oet
+        a_t = oet[1]
+        e_t = oet[2]
+        inc_t = oet[3]
+        ape_t = oet[4]
+        lam_t = oet[5]
+
+        # Weights
+        Woe = params.Woe
+        Wa = Woe[1]
+        We = Woe[2]
+        Winc = Woe[3]
+        Wape = Woe[4]
+        Wlam = Woe[5]
+
+        # Ephemeride
+        eph = params.eph
+    
+        ## Create Q
+        # Some initial terms
+        p = a*(1-e^2) # semi-latus rectum
+        if mu*p <0 # about to error out
+            @infiltrate
+        end
+        h = sqrt(mu*p)
+        # Element Selection vectors
+        eps_a   = SA[1; 0; 0; 0; 0; 0]
+        eps_e   = SA[0; 1; 0; 0; 0; 0] 
+        eps_inc = SA[0; 0; 1; 0; 0; 0]
+        eps_ape = SA[0; 0; 0; 1; 0; 0]
+        eps_lam = SA[0; 0; 0; 0; 1; 0]
+
+        # Penalty Functions
+        Wp = params.Wp
+        impact_constraint = 1 - a*(1-e)/rpmin
+        escape_constraint = a/aesc - 1
+        P1 = params.Aimp*exp(params.kimp*impact_constraint)
+        P2 = params.Aesc*exp(params.kesc*escape_constraint)
+        P = Wp*(P1 + P2)
+
+        # Scaling (a only)
+        Sa = (1+((a-a_t)/(mpet*a_t))^npet)^(1/rpet);
+
+        # Distance Functions
+        dista = a - a_t;
+        diste = e - e_t;
+        distinc = inc - inc_t;
+        distape = acos(cos(ape - ape_t));
+        distlam = acos(cos(lam-lam_t));
+        # Sign Functions
+        sig_a = dista;
+        sig_e = diste;
+        sig_inc = distinc;
+        sig_ape = distape;
+        sig_lam = distlam;
+
+        # Sunlight direction in perifocal frame
+        svec_P = @SArray [
+            cos(lam)*cos(ape)-sin(lam)*cos(inc)*sin(ape);
+            -cos(lam)*sin(ape)-sin(lam)*cos(inc)*cos(ape);
+            sin(lam)*sin(inc)
+        ]
+        se = svec_P[1]; sp = svec_P[2]; sh = svec_P[3]; #breaking it down
+
+        # Ballistic Evolution of state (as a function of x)
+        coe = getCOE(eph, t)
+        a_E = coe[1]
+        e_E = coe[2]
+        tru_E = coe[6] # pull true anomaly
+        #e_E = eph.eccentricity
+        #a_E = eph.semiMajorAxis
+        #tru_E = get_heliocentric_position(eph, t) # earth heliocentric true anom evaluated at current time
+        nudot = (1+e*cos(tru))^2 / (1-e^2)^(3/2) * sqrt(mu/a^3);
+        nudot_earth = (1+e_E*cos(tru_E))^2 / (1-e_E^2)^(3/2) * sqrt(mu_sun/a_E^3);
+
+        if typeof(t)!=Float64
+            @infiltrate false
+        end
+        #f0 = @SVector [0; 0; 0; 0; -nudot_earth; nudot];
+
+        # BEST CASE TIME TO GO's
+        # Semi-major axis:
+        nustar_a = atan(sig_a*se, -sig_a*sp)
+        adotnn = oedotnn(a, e, inc, ape, lam, nustar_a, sig_a, eps_a, nudot, nudot_earth, params, t)
+        tau_a = abs(dista)/-adotnn  # best-case ttg term
+        
+        # Ecccentricity
+            # For eccentricity, two edotnn's are computed and compared, smaller is taken and used in Q
+        nustar_e1 = 0.5*atan(sig_e*se, -sig_e*sp) + 0*pi
+        nustar_e2 = 0.5*atan(sig_e*se, -sig_e*sp) + 1*pi
+        edotnn1 = oedotnn(a, e, inc, ape, lam, nustar_e1, sig_e, eps_e, nudot, nudot_earth, params, t)
+        edotnn2 = oedotnn(a, e, inc, ape, lam, nustar_e2, sig_e, eps_e, nudot, nudot_earth, params, t)
+        edotnn = min(edotnn1, edotnn2)
+
+        # need to clip edotnn if it is near-zero
+        ephState = getState(eph, t)
+        d = norm(view(ephState, 1:3))
+        G0 = get_solar_flux(eph.targ) # solar flux constant at earth [kgkm/s^2]
+        a_over_m = sc.areaParam
+        ε = 1.0E-5 # given in the Oguri paper as a constant for numerical simulations
+        clip_val = -ε*a_over_m*(G0/d^2)*sqrt(a_t/mu)
+        if abs(edotnn) <= abs(clip_val) # edotnn should be negative, and needs to be clipped if nearer to zero than clip_val
+            edotnn = clip_val
+        end
+
+        tau_e = abs(diste)/-edotnn
+        
+        # Inclination
+        nustar_inc = pi/2 - ape + sign_smooth(sig_inc*sh, 50)*(asin(e*sin(ape))+pi/2)
+        incdotnn = oedotnn(a, e, inc, ape, lam, nustar_inc, sig_inc, eps_inc, nudot, nudot_earth, params, t)
+        tau_inc = abs(distinc)/-incdotnn
+
+        # Argument of periapsis
+        if Wape == 0.0
+            tau_ape = 0.0
+        else # only calculate this if Wape != 0
+            # This one is done with a brute force method:
+            nu = range(0, 2*pi, 200)  # 200 evenly spaced points from 0 to 2*pi
+            mappedvals = Vector{Any}(undef, length(nu)) # initialize solution
+            for i in range(1, length(nu))
+                mappedvals[i] = sig_ape*p/(h*(1+e*cos(nu[i]))) * (1/e * sin(nu[i])*(-se*sin(nu[i])+sp*cos(nu[i])) - sin(nu[i]+ape)/tan(inc) * sh)
+            end
+            nustar_ape = nu[argmin(mappedvals)] # the nu that minimized mappedvals is the approx. nustar for ape
+
+            # From here, it is the same as the others
+            apedotnn = oedotnn(a, e, inc, ape, lam, nustar_ape, sig_ape, eps_ape, nudot, nudot_earth, params, t)
+            tau_ape = abs(distape)/-apedotnn
+        end
+
+        # Longitude of ascending node from ir (lambda)
+        if Wlam == 0.0
+            tau_lam = 0.0
+        else # only calculate if Wlam !=0
+            nustar_lam = pi - ape + sign_smooth(sig_lam*sh/sin(inc), 50)*acos(e*cos(ape))
+            lamdotnn = oedotnn(a, e, inc, ape, lam, nustar_lam, sig_lam, eps_lam, nudot, nudot_earth, params, t)
+            tau_lam = abs(distlam)/-lamdotnn
+        end
+
+        ###################################################################################################################################################
+        # PUTTING Q TOGETHER :)
+        Q = (1+Wp*P)*(Wa*Sa*tau_a^2 + We*tau_e^2 + Winc*tau_inc^2 + Wape*tau_ape^2 + Wlam*tau_lam^2)
+        ###################################################################################################################################################
+        @infiltrate false
+        return Q
 end
-
-"""
-use finitediff on this and compare to above
-"""
-function Pfun(e, a, params)
-    kimp = params.kimp
-    Aimp = params.Aimp
-    rpmin = params.rp_min
-    P = Aimp*exp(kimp * (1-a*(1-e)/rpmin))
-end
-=#
-
