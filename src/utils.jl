@@ -1,4 +1,3 @@
-
 # Some utility functions, not specifically associated with anything
 """
     isEclipsed()
@@ -21,13 +20,13 @@ Source:
 function isEclipsed(e::Ephemeride, r, et)
 
     # Pull planet state
-    planetState = getState(e, et)
-    sun_planet_dist = norm(view(planetState, 1:3))
+    relative_state_vec = getState(e, et)
+    sun_planet_dist = norm(view(relative_state_vec, 1:3))
 
-    # The calculation below assumes the planet position vector is centered at the planet and points toward the sun
+    # The calculation below assumes the relative vector is centered at the planet and points toward the sun
     # This block modifies the planet state to ensure correct directionality
     if e.obs == 10 # if the ephemeride observer is 10 (Sun), then the planet state will be directed from the sun to the planet, and needs to be flipped
-        planetState = -1*planetState
+        relative_state_vec = -1*relative_state_vec
     elseif e.targ != 10 # i.e if neither e.targ or e.obs is the Sun
         throw(ArgumentError("Neither observer or target of Ephemeride is the Sun(SPICE ID 10). No umbral calculation possible"))
     end
@@ -35,7 +34,7 @@ function isEclipsed(e::Ephemeride, r, et)
 
     # Get direction to the sunlight in the planets inertial frame
     # note: This is why the planet state wrt sun should be expressed in planet's inertial frame.
-    s_hat = view(planetState, 1:3)/sun_planet_dist # direction to sun
+    s_hat = view(relative_state_vec, 1:3)/sun_planet_dist # direction to sun
 
     # first, check if s/c is between sun and planet
     if dot(r, s_hat) >= 0 # if the dot prod. here is > 0, the s/c position vector is pointed in the same direction as the direction to the sun, and therefore is in sunlight
@@ -248,6 +247,24 @@ function hill_to_orbit_transform(inc, ape, lam, tru)
     return R
 end
 
+
+"""
+eci2ric(r, v, mu)
+    ric -> alias for orbit frame
+    returns the transformation matrix fro, inertial to hill frame
+"""
+function eci2ric(r, v)
+    h = cross(r, v)
+    rhat = r/norm(r)
+    chat = h / norm(h)
+    ihat = cross(chat, rhat)
+    ret = SMatrix{3,3}([
+        rhat[1] rhat[2] rhat[3];
+        ihat[1] ihat[2] ihat[3];
+        chat[1] chat[2] chat[3]
+    ])
+    return ret
+end
 
 """
 function get_gm(id): get the gravitational parameter (GM, or mu) of a celestial body by passing in its SPICE ID

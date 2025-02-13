@@ -198,7 +198,7 @@ end
 function QLawEOM!(dx, x, params::QLawParams{Oguri}, t)
     
     # update Time
-    params.current_time = t # current time in ephemeris time [s]
+    # params.current_time = t # current time in ephemeris time [s]
 
     # Unpack
     eph = params.eph # ephemeride struct containing earth's helio position at epoch and epoch time in ephemeris time
@@ -232,7 +232,7 @@ function QLawEOM!(dx, x, params::QLawParams{Oguri}, t)
     (r, v) = coe2rv(a, e, inc, ape, RAAN, tru, mu)
     if !isEclipsed(eph, r, t)
         # Compute Control:
-        alphastar, betastar, dQdx = compute_control(x, params)
+        alphastar, betastar, dQdx = compute_control(t, x, params)
         u = @SVector [alphastar; betastar]
 
         ## Compute derivatives based on control:
@@ -267,7 +267,7 @@ end
 function QLawEOM!(dx, x, params::QLawParams{Keplerian}, t)
     
     # update Time
-    params.current_time = t # current time in ephemeris time [s]
+    # params.current_time = t # current time in ephemeris time [s]
     # Unpack
     eph = params.eph # ephemeride struct containing earth's helio position at epoch and epoch time in ephemeris time
     mu = params.mu
@@ -290,7 +290,7 @@ function QLawEOM!(dx, x, params::QLawParams{Keplerian}, t)
     (r, v) = coe2rv(a, e, inc, ape, ran, tru, mu)
     if !isEclipsed(eph, r, t)
         # Compute Control:
-        alphastar, betastar, dQdx = compute_control(x, params)
+        alphastar, betastar, dQdx = compute_control(t, x, params)
         u = @SVector [alphastar; betastar]
 
         ## Compute derivatives based on control:
@@ -307,8 +307,18 @@ function QLawEOM!(dx, x, params::QLawParams{Keplerian}, t)
     else
         a_SRP_O = @SVector(zeros(3)) # If isEclipsed is true, SRP is zero
     end
-
-    dx[1:6] .= f0 + F*(a_SRP_O); 
+    
+    # add in perturbations
+    mdl = params.gravity_model
+    iau = params.earth_orientation_parameters
+    itrf2gcrf = Orient.orient_rot3_itrf_to_gcrf(iau, t)
+    pos_fixed = transpose(itrf2gcrf) * r
+    a_perturb_fixed = getFirstPartial(mdl, pos_fixed, false) # get perturbation from gravity in fixed frame
+    a_perturb_eci = itrf2gcrf * a_perturb_fixed
+    a_perturb_orbit = eci2ric(r,v)*a_perturb_eci
+    
+    dx[1:6] .= f0 + F*(a_SRP_O+a_perturb_orbit); 
+    # dx[1:6] .= f0 + F*(a_SRP_O); 
 
 end
 
@@ -411,22 +421,13 @@ function two_body_eom_perturbed!(dx, x, ps::Tuple, t)
 
     # Load from parameters
     mu = ps[1]
-    fs = ps[2] #frame system
-    mdl = ps[3]
+    mdl = ps[2]
 
-    # Update inertial s/c point in FrameSystem
-    update_point!(fs, Spacecraft, x, t)
 
-    # Get Earth-Fixed coords
-    x_fixed = vector6(fs, Earth, Spacecraft, ITRF, t)
-
-    # Create pertubation acceleration vectory by taking the first partial of the gravitational potential, given by mdl
-    #a_perturb = zeros(3,1)
-    a_perturb_fixed = getFirstPartial(mdl, x_fixed, false) # get perturbation from gravity in fixed frame
-
-    # Rotate a_perturb into inertial
-    update_point!(fs, acc, a_perturb_fixed, t)
-    a_perturb = vector3(fs, Earth, acc, GCRF, t)
+    itrf2gcrf = Orient.orient_rot3_itrf_to_gcrf(Orient.iau2000a, t)
+    pos_fixed = transpose(itrf2gcrf) * view(x, 1:3)
+    a_perturb_fixed = getFirstPartial(mdl, pos_fixed, false) # get perturbation from gravity in fixed frame
+    a_perturb = itrf2gcrf * a_perturb_fixed
 
     a_sum = (-mu/r^3 * rvec) + a_perturb
 

@@ -1,9 +1,12 @@
+using StaticArrays
 #= 
 Gravitational Force Modeling via harmonics
 Source: Fast Gravity with partials nasa technical doc, 1993. (NASA CR-188243)
 =#
-
-struct NormalizedGravityModel
+"""
+    NormalizedGravityModel
+"""
+struct NormalizedGravityModel{T <: AbstractArray}
 
     degree::Int # max degree "n"
     order::Int # max order "m"
@@ -11,8 +14,8 @@ struct NormalizedGravityModel
     R::Float64 # Planet average equatorial radius
     mu::Float64 # planet gravitational parameter
 
-    C::AbstractArray # Normalized matrix of cosine coefficients
-    S::AbstractArray # Normalized matrix of sine coefficients
+    C::T # Normalized matrix of cosine coefficients
+    S::T # Normalized matrix of sine coefficients
 
     GravityModel::Symbol # Model name (example; :EGM96)
 
@@ -51,8 +54,8 @@ function NormalizedGravityModel(degree, order, fileloc; R=6738.0, mu=398600.4418
         throw(error("Specified degree or order larger than available coefficients"))
     end
     
-    C = view(Cfull, 1:nidx, 1:midx)
-    S = view(Sfull, 1:nidx, 1:midx) 
+    C = Cfull[1:nidx, 1:midx]
+    S = Sfull[1:nidx, 1:midx] 
 
     # Create model
     NormalizedGravityModel(
@@ -79,8 +82,8 @@ File reader designed to read in and organize Cnm and Snm coefficient data for th
 function EGM_coeff_reader(fileloc)
 
     # Read File
-    data = readdlm(fileloc)
-
+    data = read_matrix_dlm(fileloc) # using a function barrier
+    
     # Add 1 to the index columns (col. 1 and 2 for n and m, respectively) to account for julia index shift
     data[:,1:2] .+= 1
 
@@ -100,13 +103,22 @@ function EGM_coeff_reader(fileloc)
         C[nidx, midx] = row[3]  # Assign Cnm from column 3
         S[nidx, midx] = row[4]  # Assign Snm from column 4
     end
+
     return C, S
+end
+
+"""
+    read_matrix_dlm
+function barrier to enforce matrix creation
+"""
+function read_matrix_dlm(l) 
+    return readdlm(l)::Matrix{Float64}
 end
 
 """
     getPotential(mdl::NormalizedGravityModel, x::AbstractVector, wantCentralForce::Bool)
 """
-function getPotential(mdl::NormalizedGravityModel, x::AbstractVector, wantCentralForce::Bool)
+function getPotential(mdl::NormalizedGravityModel, x::AbstractVector{T}, wantCentralForce::Bool) where T
     # Pull parameters from model
     C = mdl.C
     S = mdl.S
@@ -138,13 +150,13 @@ function getPotential(mdl::NormalizedGravityModel, x::AbstractVector, wantCentra
     end
 
     # C_tilda and S_tilda terms, equation 3-18
-    Ctil = Vector{}(undef, nidxmax) 
-    Stil = Vector{}(undef, nidxmax)
+    Ctil = Vector{T}(undef, nidxmax) 
+    Stil = Vector{T}(undef, nidxmax)
     Ctil[1] = 1.0; Ctil[2] = Xovr;
     Stil[1] = 0.0; Stil[2] = Yovr;
 
     # Loop to calculate everything else
-    P = Matrix{}(undef, nidxmax, nidxmax)   # initialize array of all legendre functions. n>=m always true, so initialize as nxn to avoid errors with non-square models.
+    P = Matrix{T}(undef, nidxmax, nidxmax)   # initialize array of all legendre functions. n>=m always true, so initialize as nxn to avoid errors with non-square models.
     #P = zeros(nidxmax, midxmax)
     P[1,1] = 1.0            # seed recursion with initial values
     P[1,2] = 0.0
@@ -216,12 +228,17 @@ end
 """
     getFirstPartial(model::NormalizedGravityModel, x::AbstractVector, wantCentralForce::bool)
 returns the gravitational acceleration vector g in earth-fixed coordinates by calculating the first partial of the gravitational potential.
+
+# Inputs
+    model::NormalizedGravityModel: Struct containing data and other variables
+    x::AbstractVector: 3x1 position vector in Earth-fixed frame (ITRF)
+    wantCentralForce::Bool: true if user wants to include the central force, false if user wants pertubation terms only
 """
 function getFirstPartial(
     mdl::NormalizedGravityModel, # data struct
-    x::AbstractVector, # fixed position vector
+    x::AbstractVector{T}, # fixed position vector
     wantCentralForce::Bool # do you want entire potential or just pertubation terms
-)
+) where T
     # Point to data in NormalizedGravityModel
     Re = mdl.R    # planet radius
     C = mdl.C     # cosine coeffs.
@@ -248,8 +265,8 @@ function getFirstPartial(
     Reovrn = Reovr              # (Re/r)^n (will be calculated in recursion)
 
     # C_tilda and S_tilda terms, equation 3-18
-    Ctil = Vector{}(undef, nidxmax) 
-    Stil = Vector{}(undef, nidxmax)
+    Ctil = Vector{T}(undef, nidxmax) 
+    Stil = Vector{T}(undef, nidxmax)
     Ctil[1] = 1.0; Ctil[2] = Xovr;
     Stil[1] = 0.0; Stil[2] = Yovr;
 
@@ -261,7 +278,7 @@ function getFirstPartial(
     sumk = 0.0
 
     # Generating associated legendre functions
-    P = Matrix{}(undef, nidxmax, nidxmax)   # initialize array of all legendre functions. n>=m always true, so initialize as nxn to avoid errors with non-square models.
+    P = Matrix{T}(undef, nidxmax, nidxmax)   # initialize array of all legendre functions. n>=m always true, so initialize as nxn to avoid errors with non-square models.
     #P = zeros(nidxmax, nidxmax)
     P[1,1] = 1.0            # seed recursion with initial values
     P[1,2] = 0.0
@@ -389,8 +406,8 @@ function getSecondPartial(mdl::NormalizedGravityModel, x::AbstractVector, wantCe
     mu_over_r2 = mu_over_r / r
     mu_over_r3 = mu_over_r2 / r
     # C_tilda and S_tilda terms, equation 3-18
-    Ctil = Vector{}(undef, nidxmax) 
-    Stil = Vector{}(undef, nidxmax)
+    Ctil = Vector{Float64}(undef, nidxmax) 
+    Stil = Vector{Float64}(undef, nidxmax)
     Ctil[1] = 1.0; Ctil[2] = Xovr;
     Stil[1] = 0.0; Stil[2] = Yovr;
 

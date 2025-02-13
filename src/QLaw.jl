@@ -10,7 +10,7 @@ function to compute alphastar and betastar at a given instant in time
     -alphastar: control variable alpha at given time instant
     -betastar: control variable beta at given time instant
 """
-function compute_control(x, params::QLawParams{Oguri})
+function compute_control(t, x, params::QLawParams{Oguri})
     # Unpacking:
     mu = params.mu
     a = x[1]
@@ -32,7 +32,7 @@ function compute_control(x, params::QLawParams{Oguri})
     
 
     # Comment in this section for ForwardDiff (comment out below section)
-    Q(x) = calculate_Q(x, params) # defining a unary closure to allow for passage of params into ForwardDiff
+    Q(x) = calculate_Q(t, x, params) # defining a unary closure to allow for passage of params into ForwardDiff
     cfg = ForwardDiff.GradientConfig(Q, x) # Get the config
     dQdx = ForwardDiff.gradient(Q, x, cfg)
     #dQdx = ForwardDiff.gradient(x->calculate_Q(x, params), x) # this one seems to work instead too
@@ -73,9 +73,9 @@ function to compute alphastar and betastar at a given instant in time
     -alphastar: control variable alpha at given time instant
     -betastar: control variable beta at given time instant
 """
-function compute_control(x, params::QLawParams{Keplerian})
+function compute_control(t, x, params::QLawParams{Keplerian})
     # Unpacking:
-    t = params.current_time
+    # t = params.current_time
     mu = params.mu
     a = x[1]
     e = x[2]
@@ -101,7 +101,7 @@ function compute_control(x, params::QLawParams{Keplerian})
     
 
     # Comment in this section for ForwardDiff (comment out below section)
-    Q(x) = calculate_Q(x, params) # defining a unary closure to allow for passage of params into ForwardDiff
+    Q(x) = calculate_Q(t, x, params) # defining a unary closure to allow for passage of params into ForwardDiff
     cfg = ForwardDiff.GradientConfig(Q, x) # Get the config
     dQdx = ForwardDiff.gradient(Q, x, cfg)
     #dQdx = ForwardDiff.gradient(x->calculate_Q(x, params), x) # this one seems to work instead too
@@ -139,7 +139,7 @@ Calculate the proximity quotient, Q
     - x: state vector [a, e, i, ω, Ω, ν]
     - params::QLawParams{Keplerian}: parameter struct
 """
-function calculate_Q(x, params::QLawParams{Oguri})
+function calculate_Q(t, x, params::QLawParams{Oguri})
 
         # Unpack inputs
         a = x[1]
@@ -155,7 +155,7 @@ function calculate_Q(x, params::QLawParams{Oguri})
         mu_sun = params.mu_sun
         rpmin = params.rp_min
         aesc = params.a_esc
-        t = params.current_time
+        #t = params.current_time
 
         # Scaling terms
         mpet = params.m_petro
@@ -318,7 +318,7 @@ Calculate the proximity quotient, Q
     - x: state vector [a, e, i, ω, Ω, ν]
     - params::QLawParams{Keplerian}: parameter struct
 """
-function calculate_Q(x, params::QLawParams{Keplerian})
+function calculate_Q(t, x, params::QLawParams{Keplerian})
     # Unpack inputs
     a = x[1]
     e = x[2]
@@ -333,7 +333,7 @@ function calculate_Q(x, params::QLawParams{Keplerian})
     mu_sun = params.mu_sun
     rpmin = params.rp_min
     aesc = params.a_esc
-    t = params.current_time
+    #t = params.current_time
 
     # Scaling terms
     mpet = params.m_petro
@@ -424,6 +424,7 @@ function calculate_Q(x, params::QLawParams{Keplerian})
     # Semi-major axis:
     nustar_a = atan(sig_a*se, -sig_a*sp)
     adotnn = oedotnn(a, e, inc, ape, lam, nustar_a, sig_a, eps_a, nudot, params, t)
+    # ~, adotnn = gss(nu->oedotnn_j2(a, e, inc, ape, lam, nu, sig_a, eps_a, nudot, params, t, ran), 0, 2*pi)
     tau_a = abs(dista)/-adotnn  # best-case ttg term
     
     # Ecccentricity
@@ -433,6 +434,7 @@ function calculate_Q(x, params::QLawParams{Keplerian})
     edotnn1 = oedotnn(a, e, inc, ape, lam,nustar_e1, sig_e, eps_e, nudot, params, t)
     edotnn2 = oedotnn(a, e, inc, ape, lam,nustar_e2, sig_e, eps_e,nudot, params, t)
     edotnn = min(edotnn1, edotnn2)
+    #~, edotnn = gss(nu->oedotnn_j2(a, e, inc, ape, lam, nu, sig_e, eps_e, nudot, params, t, ran), 0, 2*pi)
 
     # need to clip edotnn if it is near-zero
     ephState = getState(eph, t)
@@ -450,13 +452,14 @@ function calculate_Q(x, params::QLawParams{Keplerian})
     # Inclination
     nustar_inc = pi/2 - ape + sign(sig_inc*sh)*(asin(e*sin(ape))+pi/2)
     incdotnn = oedotnn(a, e, inc, ape, lam, nustar_inc, sig_inc, eps_inc, nudot, params, t)
+    #~, incdotnn = gss(nu->oedotnn_j2(a, e, inc, ape, lam, nu, sig_inc, eps_inc, nudot, params, t, ran), 0, 2*pi)
     tau_inc = abs(distinc)/-incdotnn
 
     # Argument of periapsis
     if Wape == 0.0
         tau_ape = 0.0
     else # only calculate this if Wape != 0
-        # This one is done with a brute force method:
+        #This one is done with a brute force method:
         nu = range(0, 2*pi, 200)  # 200 evenly spaced points from 0 to 2*pi
         mappedvals = Vector{Any}(undef, length(nu)) # initialize solution
         for i in range(1, length(nu))
@@ -464,9 +467,9 @@ function calculate_Q(x, params::QLawParams{Keplerian})
         end
         nustar_ape = nu[argmin(mappedvals)] # the nu that minimized mappedvals is the approx. nustar for ape
 
-        # From here, it is the same as the others
+        #From here, it is the same as the others
         apedotnn = oedotnn(a, e, inc, ape, lam, nustar_ape, sig_ape, eps_ape, nudot, params, t)
-        #~, apedotnn = gss(nu->oedotnn(a, e, inc, ape, lam, nu, sig_ape, eps_ape, nudot, params, t), 0, 2*pi)
+        #~, apedotnn = gss(nu->oedotnn_j2(a, e, inc, ape, lam, nu, sig_ape, eps_ape, nudot, params, t, ran), 0, 2*pi)
         tau_ape = abs(distape)/-apedotnn
     end
 
@@ -476,6 +479,7 @@ function calculate_Q(x, params::QLawParams{Keplerian})
     else # only calculate if Wran !=0
         nustar_ran = pi - ape + sign(sig_ran*sh/sin(inc))*acos(e*cos(ape))
         randotnn = oedotnn(a, e, inc, ape, lam, nustar_ran, sig_ran, eps_ran, nudot, params, t)
+        #~, randotnn = gss(nu->oedotnn_j2(a, e, inc, ape, lam, nu, sig_ran, eps_ran, nudot, params, t, ran), 0, 2*pi)
         tau_ran = abs(distran)/-randotnn
     end
     
@@ -588,12 +592,23 @@ calculate the oedotnn term in best-case time-to-go based on nustar_oe
 # OUTPUT:
     oedotnn: positive denominator of best-case time-to-go for given element in oe
 """
-function oedotnn_j2(a, e, inc, ape, lam, nustar_oe, sig_oe, eps_oe, nudot, params::QLawParams{Keplerian}, t)
-    FS = params.frame_system
-    sc = params.sc
+function oedotnn_j2(a, e, inc, ape, lam, nustar_oe, sig_oe, eps_oe, nudot, params::QLawParams{Keplerian}, t, ran)
     mu = params.mu
-    eph = params.eph
     R_H_O_star = hill_to_orbit_transform(inc, ape, lam, nustar_oe)
+    # Get the nonspherical gravity acceleration
+    mdl = params.gravity_model_j2
+    iau = params.earth_orientation_parameters
+    r, v = coe2rv(a, e, inc, ape, ran, nustar_oe, mu)
+    
+    itrf2gcrf = Orient.orient_rot3_itrf_to_gcrf(iau, t)
+    pos_fixed = transpose(itrf2gcrf) * r
+    a_perturb_fixed = getFirstPartial(mdl, pos_fixed, false) # get perturbation from gravity in fixed frame
+    a_perturb_eci = itrf2gcrf * a_perturb_fixed
+    a_perturb_hill = transpose(R_H_O_star)*(eci2ric(r,v)*a_perturb_eci)  # a_perturb_hill=R_H_O_star'*a_perturb_orbit
+    
+    sc = params.sc
+    eph = params.eph
+    
     Foe = F(a, e, inc, ape, nustar_oe, mu)
     pvec = -transpose(sig_oe*eps_oe'*Foe*R_H_O_star);
     py = pvec[2] 
@@ -602,7 +617,7 @@ function oedotnn_j2(a, e, inc, ape, lam, nustar_oe, sig_oe, eps_oe, nudot, param
     alphastar = calculate_alpha_star(pvec, sc)
     alphastar = median([params.alpha_min, alphastar, params.alpha_max]) # enforcing alphastar range constraint
     ustar = @SVector [alphastar; betastar]  # elementwise optimal control (EOC)
-    astar_hill = aSRP(ustar, sc, eph, t) # SRP accel. evaluated at EOC
+    astar_hill = aSRP(ustar, sc, eph, t)+a_perturb_hill # acceleration evaluated at EOC
 
     #oedotnn = sig_oe*eps_oe'*f0 - pvec'*astar_hill # positive denominator of best-case ttg for A
     dot_eps_oe_f0 = eps_oe[6]*nudot 

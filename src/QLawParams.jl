@@ -12,7 +12,6 @@ mutable struct QLawParams{T<:QLawType}
     mu_sun::Float64
 
     # Living Parameters
-    current_time::Any # time (ephemeris time) Must be able to be a Forward Diff DualType
     alpha::Float64 # control angle alpha [rad]
     beta::Float64 # control angle beta [rad]
     eclipsed::Bool
@@ -56,7 +55,11 @@ mutable struct QLawParams{T<:QLawType}
     reltol::Float64
 
     # Frame system
-    frame_system::FrameSystem
+    earth_orientation_parameters::Orient.IAUModel
+
+    # gravity model
+    gravity_model::NormalizedGravityModel
+    gravity_model_j2::NormalizedGravityModel
 
     # Writing data
     writeData::Bool
@@ -71,7 +74,8 @@ function QLawParams(
     oe0,
     oet,
     oeTols,
-    FS::FrameSystem; ### MANDATORY INPUTS END HERE ###
+    iau::Orient.IAUModel,
+    mdl::NormalizedGravityModel; ### MANDATORY INPUTS END HERE ###
     mu::Float64=GRAV_PARAMS[399], #Defaults to earth
     mu_sun::Float64=GRAV_PARAMS[10], #helpful to carry this around, not totally necessary
     Woe::Vector{Float64}=[1.0; 1.0; 1.0; 1.0; 1.0],
@@ -107,9 +111,15 @@ function QLawParams(
     (r, ~) = coe2rv(oe0[1], oe0[2], oe0[3], oe0[4], oe0[5]+nue, oe0[6], mu)
     eclipsed = isEclipsed(eph, r, current_time)
 
-    qlawparam = QLawParams{type}(sc, eph, mu, mu_sun, current_time, alpha, beta, eclipsed, oe0, oet, oeTols, Woe, Wp, 
+    # Create the J2 model 
+    n = 2
+    m = 0
+    l = datadir("EGM96_to360.ascii")
+    mdl_j2 = NormalizedGravityModel(n, m, l, R=6378.139, mu=398600.4418);
+
+    qlawparam = QLawParams{type}(sc, eph, mu, mu_sun, alpha, beta, eclipsed, oe0, oet, oeTols, Woe, Wp, 
         Aimp, kimp, Aesc, kesc, rp_min, a_esc, m_petro, n_petro, r_petro, alpha_min, alpha_max, beta_min, beta_max, step_size, max_sim_time, abstol, reltol,
-        FS, writeData)
+        iau, mdl, mdl_j2, writeData)
 
     return qlawparam
 end

@@ -8,33 +8,27 @@ using BenchmarkTools
 furnsh(datadir("naif0012.tls"))
 furnsh(datadir("de440.bsp"))
 ## END SPICE SETUP
-
+plot = false
 # ====== SELECT CASE
-CASE_ID = "A"   # Current cases: A-G
+CASE_ID = "E"   # Current cases: A-G
 include("TestCase_info.jl") # file that includes the test case selector function
 
 
 # Simulation time setup:
 date = "2023-01-01T12:30:00" 
 startTime = utc2et(date)  # start date in seconds past j2000
-simTime = 55*86400 # amount of time [s] to simulate for
+simTime = 155*86400 # amount of time [s] to simulate for
 endTime = startTime+simTime
+
+# Gravity model
+n = 5
+m = 5
+l = datadir("EGM96_to360.ascii")
+mdl = NormalizedGravityModel(n, m, l, R=6378.139, mu=398600.4418);
 
 # ======= Frame System Setup
 Orient.init_eop(datadir("iau2000a.eop.dat"))
-FS = FrameSystem{4, Float64}()
-@axes GCRF 1 GeocentricCelestialReferenceFrame
-@axes ITRF 6 InternationalTerrestrialReferenceFrame
-@point Earth 399
-@point Spacecraft -1_900_000
-@point acc -1_999_999
-add_axes_inertial!(FS, GCRF)
-add_point_root!(FS, Earth, GCRF)
-add_axes_itrf!(FS, ITRF, GCRF) # adding the Earth-fixed reference
-add_point_updatable!(FS, Spacecraft, Earth, GCRF) # adding the spacecraft as an updateable point in inertial coords
-# update_point!(FS, Spacecraft, X0, epoch)
-add_point_updatable!(FS, acc, Earth, ITRF) # add a dummy point for the acceleration to rotate it later
-update_point!(FS, acc, [0.0; 0.0; 0.0], startTime)
+iau = Orient.iau2000a
 
 # ======= QLaw Parameter setup
 eph = Ephemeride((startTime, endTime), 1000, 399, 10, "J2000")
@@ -45,7 +39,8 @@ params = QLawParams(
     X0, 
     XT, 
     oetols,
-    FS, 
+    iau,
+    mdl,
     Woe=Woe,
     rp_min=6578.0,
     a_esc=1.0E5,
@@ -73,14 +68,12 @@ affect!(integrator) = terminate!(integrator)
 ccb = ContinuousCallback(condition, affect!)
 
 # ====== Run solve function to solve DE
-@btime sol=solve(prob, AutoTsit5(Rosenbrock23()), saveat=60, callback=ccb);
-sol=solve(prob, AutoTsit5(Rosenbrock23()), saveat=60, callback=ccb);
+sol = @btime solve(prob, AutoTsit5(Rosenbrock23()), saveat=60, callback=ccb);
 
 
 
 print("End Values: ")
 println(sol.u[end])
-
 #######################################################################################################################################################
 # ===== Post-Processing
 x = reduce(hcat, sol.u)' # full solution (matrix form)
@@ -93,18 +86,22 @@ angles = Matrix{Float64}(undef, (size(x)[1], 2))
 shadex = []
 shadey = [] 
 shadez = []
+Q = Vector{Float64}(undef, size(x)[1])
 for row in axes(x, 1)
     local coe = getCOE(eph, eph.t0+t[row])
     local nue = coe[6] # pull true anomaly
 
-    # Save lambda separately
-    lambda[row] = x[row, 5]
+    if qlawType == Oguri
+        lambda[row] = x[row, 5] # Save lambda separately
+        kep[row,:] = [x[row,1], x[row,2], x[row,3], x[row,4], x[row,5]+nue, x[row,6]] # get keplerian elements
+        r, v = coe2rv(x[row,1], x[row,2], x[row,3], x[row,4], x[row,5]+nue, x[row,6], 398600.4418) # Convert keplerian oe's to cartesian coords
+    
+    elseif qlawType == Keplerian
+        lambda[row] = x[row, 5] - nue # Save lambda separately
+        kep[row,:] = [x[row,1], x[row,2], x[row,3], x[row,4], x[row,5], x[row,6]]
+        r, v = coe2rv(x[row,1], x[row,2], x[row,3], x[row,4], x[row,5], x[row,6], 398600.4418)
+    end
 
-    # Convert to keplerian orbital elements (from lambda = RAAN-nue)
-    kep[row,:] = [x[row,1], x[row,2], x[row,3], x[row,4], x[row,5]+nue, x[row,6]]
-
-    # Convert keplerian oe's to cartesian coords
-    r, v = coe2rv(x[row,1], x[row,2], x[row,3], x[row,4], x[row,5]+nue, x[row,6], 398600.4418)
     cart[row,1:3] .= r
     cart[row,4:6] .= v
 
@@ -118,7 +115,8 @@ for row in axes(x, 1)
 
 
     # Re-compute the sail angles
-    local alpha, beta, dQdx = compute_control(kep[row,:], params)
+    local alpha, beta, dQdx = compute_control(sol.t[row], kep[row,:], params)
+    Q[row] = calculate_Q(sol.t[row], x[row,:], params)
     angles[row,:] = [alpha, beta]
 end
 
@@ -137,129 +135,131 @@ end
 
 # ===== Plotting
 # First read the data
-kep = readdlm(datadir("kep.txt"), '\t', '\n'; header=false)
-cart = readdlm(datadir("cart.txt"), '\t', '\n'; header=false)
+if plot
+    kep = readdlm(datadir("kep.txt"), '\t', '\n'; header=false)
+    cart = readdlm(datadir("cart.txt"), '\t', '\n'; header=false)
 
-#Pull starting, ending points
-startPoint = cart[1, 1:3]
-endPoint = cart[end, 1:3]
+    #Pull starting, ending points
+    startPoint = cart[1, 1:3]
+    endPoint = cart[end, 1:3]
 
-# Plot 3d figure
-fig = GM.Figure(;
-)
+    # Plot 3d figure
+    fig = GM.Figure(;
+    )
 
-ax = GM.Axis3(
-    fig[1,1]; 
-    aspect = :data, 
-    xlabel = "x [km]", 
-    ylabel = "y [km]", 
-    zlabel = "z [km]",
-    title = "Transfer A, Control computed within integration"
-)
+    ax = GM.Axis3(
+        fig[1,1]; 
+        aspect = :data, 
+        xlabel = "x [km]", 
+        ylabel = "y [km]", 
+        zlabel = "z [km]",
+        title = "Transfer A, Control computed within integration"
+    )
 
-lin = GM.lines!(ax, cart[:,1], cart[:,2], cart[:,3], color=:blue, linewidth=0.5)
+    lin = GM.lines!(ax, cart[:,1], cart[:,2], cart[:,3], color=:blue, linewidth=0.5)
 
-# Plot start/end points
-sP = GM.scatter!(ax, startPoint[1], startPoint[2], startPoint[3], markersize=10.0, color=:green)
-eP = GM.scatter!(ax, endPoint[1], endPoint[2], endPoint[3], markersize=10.0, color=:red)
+    # Plot start/end points
+    sP = GM.scatter!(ax, startPoint[1], startPoint[2], startPoint[3], markersize=10.0, color=:green)
+    eP = GM.scatter!(ax, endPoint[1], endPoint[2], endPoint[3], markersize=10.0, color=:red)
 
-## Create and plot initial/final orbits 
-#Initial:
-mu = params.mu
-X0 = cart[1,:]
-a0 = kep[1,1]
-period_initial = 2*pi/sqrt(mu/a0^3)
-prob = ODEProblem(two_body_eom!, X0, (0, period_initial), mu, saveat=60)
-sol2 = solve(prob)
-orb0 = reduce(hcat, sol2.u)
-lin2 = GM.lines!(ax, orb0[1,:], orb0[2,:], orb0[3,:], color=:limegreen, linewidth=2.0)
+    ## Create and plot initial/final orbits 
+    #Initial:
+    mu = params.mu
+    X0 = cart[1,:]
+    a0 = kep[1,1]
+    period_initial = 2*pi/sqrt(mu/a0^3)
+    prob = ODEProblem(two_body_eom!, X0, (0, period_initial), mu, saveat=60)
+    sol2 = solve(prob, Vern9(), abstol=1.0e-6, reltol=1.0e-6)
+    orb0 = reduce(hcat, sol2.u)
+    lin2 = GM.lines!(ax, orb0[1,:], orb0[2,:], orb0[3,:], color=:limegreen, linewidth=2.0)
+            
+    #Final:
+    af = kep[end, 1]
+    XF = cart[end, :]
+    period_final = 2*pi/sqrt(mu/af^3)
+    prob = ODEProblem(two_body_eom!, XF, (0, period_final), mu, saveat=60, abstol=1.0e-9, reltol=1.0e-6)
+    sol3 = solve(prob, Vern9(), abstol=1.0e-6, reltol=1.0e-6)
+    orbF = reduce(hcat, sol3.u)
+    lin3 = GM.lines!(ax, orbF[1,:], orbF[2,:], orbF[3,:], color=:red, linewidth=2.0)
         
-#Final:
-af = kep[end, 1]
-XF = cart[end, :]
-period_final = 2*pi/sqrt(mu/af^3)
-prob = ODEProblem(two_body_eom!, XF, (0, period_final), mu, saveat=60)
-sol3 = solve(prob)
-orbF = reduce(hcat, sol3.u)
-lin3 = GM.lines!(ax, orbF[1,:], orbF[2,:], orbF[3,:], color=:red, linewidth=2.0)
-    
-    
-## Create and add a sphere to represent earth
-sphere = GB.Sphere(GB.Point3f(0), 6378.0)
-spheremesh = GB.mesh(GB.Tesselation(sphere, 64))
-sph = GM.mesh!(ax, spheremesh; color=(:blue))
-    
-#Create legend
-GM.Legend(fig[1, 2], [lin, sP, eP, lin2, lin3], ["Satellite Trajectory", "Starting Point", "Ending Point", "Initial Orbit", "Final Orbit"])
+        
+    ## Create and add a sphere to represent earth
+    sphere = GB.Sphere(GB.Point3f(0), 6378.0)
+    spheremesh = GB.mesh(GB.Tesselation(sphere, 64))
+    sph = GM.mesh!(ax, spheremesh; color=(:blue))
+        
+    #Create legend
+    GM.Legend(fig[1, 2], [lin, sP, eP, lin2, lin3], ["Satellite Trajectory", "Starting Point", "Ending Point", "Initial Orbit", "Final Orbit"])
 
-# Plot steering Law
-fig2 = GM.Figure()
-ax2 = GM.Axis(
-    fig2[1,1];
-    xlabel = "Time[days]",
-    ylabel = "Angle [Deg]",
-    title = "Steering Angle [alpha]"
+    # Plot steering Law
+    fig2 = GM.Figure()
+    ax2 = GM.Axis(
+        fig2[1,1];
+        xlabel = "Time[days]",
+        ylabel = "Angle [Deg]",
+        title = "Steering Angle [alpha]"
+        )
+    alp = GM.lines!(ax2, t/86400, angles[:,1]*180/pi)
+    ax3 = GM.Axis(
+        fig2[2,1];
+        xlabel = "Time[days]",
+        ylabel = "Angle [Deg]",
+        title = "Steering Angle [beta]"
+        )
+    bet = GM.lines!(ax3, t/86400, angles[:,2]*180/pi)
+
+    #plot oe histories
+    fig3 = GM.Figure(title="Orbital Element Histories")
+    axa = GM.Axis(
+        fig3[1,1],
+        xlabel="Time[days]",
+        ylabel="km",
+        title="Semi-Major Axis",
     )
-alp = GM.lines!(ax2, t/86400, angles[:,1]*180/pi)
-ax3 = GM.Axis(
-    fig2[2,1];
-    xlabel = "Time[days]",
-    ylabel = "Angle [Deg]",
-    title = "Steering Angle [beta]"
+    axe = GM.Axis(
+        fig3[2,1],
+        xlabel="Time[days]",
+        title="Eccentricity",
     )
-bet = GM.lines!(ax3, t/86400, angles[:,2]*180/pi)
+    axi = GM.Axis(
+        fig3[1,2],
+        xlabel="Time[days]",
+        ylabel="Angle[Deg]",
+        title="Inclination",
+    )
+    axape = GM.Axis(
+        fig3[2,2],
+        xlabel="Time[days]",
+        ylabel="Angle[Deg]",
+        title="Arg.Perigee",
+    )
+    axlam = GM.Axis(
+        fig3[3,1],
+        xlabel="Time[days]",
+        ylabel="Angle[Deg]",
+        title="Lambda",
+    )
+    axtru = GM.Axis(
+        fig3[3,3],
+        xlabel="Time[days]",
+        ylabel="Angle[deg]",
+        title="True anom",
+    )
+    axRAN  = GM.Axis(
+        fig3[3,2],
+        xlabel="Time[days]",
+        ylabel="Angle[deg]",
+        title="RAAN",
+    )
 
-#plot oe histories
-fig3 = GM.Figure(title="Orbital Element Histories")
-axa = GM.Axis(
-    fig3[1,1],
-    xlabel="Time[days]",
-    ylabel="km",
-    title="Semi-Major Axis",
-)
-axe = GM.Axis(
-    fig3[2,1],
-    xlabel="Time[days]",
-    title="Eccentricity",
-)
-axi = GM.Axis(
-    fig3[1,2],
-    xlabel="Time[days]",
-    ylabel="Angle[Deg]",
-    title="Inclination",
-)
-axape = GM.Axis(
-    fig3[2,2],
-    xlabel="Time[days]",
-    ylabel="Angle[Deg]",
-    title="Arg.Perigee",
-)
-axlam = GM.Axis(
-    fig3[3,1],
-    xlabel="Time[days]",
-    ylabel="Angle[Deg]",
-    title="Lambda",
-)
-axtru = GM.Axis(
-    fig3[3,3],
-    xlabel="Time[days]",
-    ylabel="Angle[deg]",
-    title="True anom",
-)
-axRAN  = GM.Axis(
-    fig3[3,2],
-    xlabel="Time[days]",
-    ylabel="Angle[deg]",
-    title="RAAN",
-)
-
-GM.lines!(axa, t/86400, kep[:,1])
-GM.lines!(axe, t/86400, kep[:,2])
-GM.lines!(axi, t/86400, kep[:,3]*180/pi)
-GM.lines!(axape, t/86400, kep[:,4]*180/pi)
-GM.lines!(axlam, t/86400, lambda*180/pi)
-GM.lines!(axRAN, t/86400, kep[:,5]*180/pi)
-GM.lines!(axtru, t/86400, kep[:,6]*180/pi)
+    GM.lines!(axa, t/86400, kep[:,1])
+    GM.lines!(axe, t/86400, kep[:,2])
+    GM.lines!(axi, t/86400, kep[:,3]*180/pi)
+    GM.lines!(axape, t/86400, kep[:,4]*180/pi)
+    GM.lines!(axlam, t/86400, lambda*180/pi)
+    GM.lines!(axRAN, t/86400, kep[:,5]*180/pi)
+    GM.lines!(axtru, t/86400, kep[:,6]*180/pi)
+end
 
 
 # Unload Kernels

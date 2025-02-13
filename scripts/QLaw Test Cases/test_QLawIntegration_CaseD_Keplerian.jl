@@ -16,6 +16,16 @@ startTime = utc2et(date)  # start date in seconds past j2000
 simTime = 55*86400 # amount of time [s] to simulate for
 endTime = startTime+simTime
 
+# Gravity model
+n = 2
+m = 0
+l = datadir("EGM96_to360.ascii")
+mdl = NormalizedGravityModel(n, m, l, R=6378.139, mu=398600.4418);
+
+# ======= Frame System Setup
+Orient.init_eop(datadir("iau2000a.eop.dat"))
+iau = Orient.iau2000a
+
 # QLaw Parameter setup
 eph = Ephemeride((startTime, endTime), 1000, 399, 10, "J2000")
 sc = basicSolarSail()
@@ -30,7 +40,9 @@ params = QLawParams(
     eph, 
     X0, 
     XT, 
-    oetols, 
+    oetols,
+    iau,
+    mdl, 
     Woe=Woe,
     rp_min=6578.0,
     a_esc=1.0E5,

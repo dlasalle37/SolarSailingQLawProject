@@ -22,11 +22,11 @@ include("splines.jl")
 include("basicSolarSail.jl")
 include("Ephemerides.jl")
 include("utils.jl")
+include("NormalizedGravityModel.jl")
 include("QLawParams.jl")
 include("EOMs.jl")
 include("QLaw.jl")
 include("QLawIntegrator.jl")
-include("NormalizedGravityModel.jl")
 include("LineSearch.jl")
 
 # Setups

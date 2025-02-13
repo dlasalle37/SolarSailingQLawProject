@@ -3,6 +3,7 @@ using DrWatson
 include(srcdir("Includes.jl"))
 import GLMakie as GM
 using FrameTransformations
+using BenchmarkTools
 
 ## SPICE SETUP
 furnsh(datadir("naif0012.tls"))
@@ -22,10 +23,12 @@ want_cf = true
 
 # ======== FIRST PARTIAL
 Pg = normalized_legendre_generator(n,m, ep)
-@time begin
-    model = NormalizedGravityModel(n, m, l, R=6378.139, mu=398600.47);
-    g = getFirstPartial(model, x, want_cf)
-end
+println("\nTiming $n by $m model creation")
+model = @btime NormalizedGravityModel(n, m, l; R=6378.139, mu=398600.47);
+
+
+println("\nTiming First Partial")
+g = @btime getFirstPartial(model, x, want_cf)
 println("\nAnalytic Acceleration [km/s2]:")
 println(g)
 
@@ -39,7 +42,8 @@ println("\nDifference b/w analytical first partial and forwardDiff:")
 println(diff)
 
 # ======== SECOND PARTIAL
-secondPartial = getSecondPartial(model, x, want_cf);
+println("\nTiming Second Partial")
+secondPartial = @btime getSecondPartial(model, x, want_cf);
 
 # Calculating second partial (jacobian) with forwardDiff
 d2U(x) = getFirstPartial(model, x, want_cf)
@@ -63,24 +67,11 @@ coe0 = [10500.0, 0.150, 25*pi/180, 10.0*pi/180, 30.0*pi/180, 0.0] #[a, e, i, ape
 X0 = [r;v]
 
 #Setup frame FrameTransformations
-mdl = NormalizedGravityModel(n, m, l, R=6378, mu=398600.4418);
+mdl = NormalizedGravityModel(n, m, l, R=6378.0, mu=398600.4418);
 Orient.init_eop(datadir("iau2000a.eop.dat"))
-FS = FrameSystem{4, Float64}()
-@axes GCRF 1 GeocentricCelestialReferenceFrame
-@axes ITRF 6 InternationalTerrestrialReferenceFrame
-@point Earth 399
-@point Spacecraft -1_900_000
-@point acc -1_999_999
-add_axes_inertial!(FS, GCRF)
-add_point_root!(FS, Earth, GCRF)
-add_axes_itrf!(FS, ITRF, GCRF) # adding the Earth-fixed reference
-add_point_updatable!(FS, Spacecraft, Earth, GCRF) # adding the spacecraft as an updateable point in inertial coords
-update_point!(FS, Spacecraft, X0, epoch)
-add_point_updatable!(FS, acc, Earth, ITRF) # add a dummy point for the acceleration to rotate it later
-update_point!(FS, acc, [0.0; 0.0; 0.0], epoch)
 
 
-ps = (mdl.mu, FS, mdl)
+ps = (mdl.mu, mdl)
 prob = ODEProblem(two_body_eom_perturbed!, X0, (epoch, epoch+5*86400), ps, saveat=60)
 sol = solve(prob, Vern9(); abstol=1.0e-12, reltol=1.0e-12)
 orb = reduce(hcat, sol.u)
@@ -95,7 +86,7 @@ ax = GM.Axis3(
     xlabel = "x [km]", 
     ylabel = "y [km]", 
     zlabel = "z [km]",
-    title = "Transfer A, Control computed within integration"
+    title = " "
 )
 
 lin = GM.lines!(ax, orb[1,:], orb[2,:], orb[3,:], color=:limegreen, linewidth=2.0)
@@ -103,3 +94,5 @@ lin = GM.lines!(ax, orb[1,:], orb[2,:], orb[3,:], color=:limegreen, linewidth=2.
 #write data
 cart = hcat(sol.t, transpose(reduce(hcat, sol.u)))
 open(datadir("ReportFile2.txt"),   "w") do io; writedlm(io,  cart); end
+
+fig
