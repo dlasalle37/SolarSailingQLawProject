@@ -27,8 +27,11 @@ l = datadir("EGM96_to360.ascii")
 mdl = NormalizedGravityModel(n, m, l, R=6378.139, mu=398600.4418);
 
 # ======= Frame System Setup
-Orient.init_eop(datadir("iau2000a.eop.dat"))
-iau = Orient.iau2000a
+eop_load_data!(iers2010a, datadir("iau2000a.eop.dat"))
+fs = FrameSystem{4, Float64}()
+add_axes_icrf!(fs)
+add_axes_gcrf!(fs)
+add_axes_itrf!(fs, :ITRF, 23, 6)
 
 # ======= QLaw Parameter setup
 eph = Ephemeride((startTime, endTime), 1000, 399, 10, "J2000")
@@ -39,7 +42,7 @@ params = QLawParams(
     X0, 
     XT, 
     oetols,
-    iau,
+    fs,
     mdl,
     Woe=Woe,
     rp_min=6578.0,
@@ -265,3 +268,4 @@ end
 # Unload Kernels
 unload("naif0012.tls")
 unload("de440.bsp")
+eop_unload_data!()

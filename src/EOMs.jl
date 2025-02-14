@@ -310,8 +310,8 @@ function QLawEOM!(dx, x, params::QLawParams{Keplerian}, t)
     
     # add in perturbations
     mdl = params.gravity_model
-    iau = params.earth_orientation_parameters
-    itrf2gcrf = Orient.orient_rot3_itrf_to_gcrf(iau, t)
+    fs = params.fs
+    itrf2gcrf = rotation3(fs, 6, 23, t)[1]; # from ICRF(SPICE ID 6) to GCRF(SPICE ID 23)
     pos_fixed = transpose(itrf2gcrf) * r
     a_perturb_fixed = getFirstPartial(mdl, pos_fixed, false) # get perturbation from gravity in fixed frame
     a_perturb_eci = itrf2gcrf * a_perturb_fixed
@@ -422,15 +422,15 @@ function two_body_eom_perturbed!(dx, x, ps::Tuple, t)
     # Load from parameters
     mu = ps[1]
     mdl = ps[2]
+    fs = ps[3]
 
 
-    itrf2gcrf = Orient.orient_rot3_itrf_to_gcrf(Orient.iau2000a, t)
+    itrf2gcrf = rotation3(fs, 6, 23, t)[1]  # itrf (id: 6) to gcrf(id:23) rotation matrix (assuming negligible difference between J2000 and GCRF)
     pos_fixed = transpose(itrf2gcrf) * view(x, 1:3)
     a_perturb_fixed = getFirstPartial(mdl, pos_fixed, false) # get perturbation from gravity in fixed frame
     a_perturb = itrf2gcrf * a_perturb_fixed
 
     a_sum = (-mu/r^3 * rvec) + a_perturb
-
     dx[1:6] .= [vvec; a_sum]
 end
 

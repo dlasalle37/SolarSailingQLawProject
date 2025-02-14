@@ -62,17 +62,21 @@ println(diff2)
 # Setup Spacecraft
 date = "2023-01-01T12:30:00" 
 epoch = utc2et(date)
+tof = 5*86400 # time of flight in seconds
 coe0 = [10500.0, 0.150, 25*pi/180, 10.0*pi/180, 30.0*pi/180, 0.0] #[a, e, i, ape, ran, nu]
 (r, v) = coe2rv(coe0[1], coe0[2], coe0[3], coe0[4], coe0[5], coe0[6], mu)
 X0 = [r;v]
 
 #Setup frame FrameTransformations
 mdl = NormalizedGravityModel(n, m, l, R=6378.0, mu=398600.4418);
-Orient.init_eop(datadir("iau2000a.eop.dat"))
+eop_load_data!(iers2010a, datadir("iau2000a.eop.dat"))
+fs = FrameSystem{4, Float64}()
+add_axes_icrf!(fs)
+add_axes_gcrf!(fs)
+add_axes_itrf!(fs, :ITRF, 23, 6)
 
-
-ps = (mdl.mu, mdl)
-prob = ODEProblem(two_body_eom_perturbed!, X0, (epoch, epoch+5*86400), ps, saveat=60)
+ps = (mdl.mu, mdl, fs)
+prob = ODEProblem(two_body_eom_perturbed!, X0, (epoch, epoch+tof), ps, saveat=60)
 sol = solve(prob, Vern9(); abstol=1.0e-12, reltol=1.0e-12)
 orb = reduce(hcat, sol.u)
 
@@ -96,3 +100,4 @@ cart = hcat(sol.t, transpose(reduce(hcat, sol.u)))
 open(datadir("ReportFile2.txt"),   "w") do io; writedlm(io,  cart); end
 
 fig
+eop_unload_data!()

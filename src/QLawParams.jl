@@ -55,7 +55,7 @@ mutable struct QLawParams{T<:QLawType}
     reltol::Float64
 
     # Frame system
-    earth_orientation_parameters::Orient.IAUModel
+    fs::FrameSystem
 
     # gravity model
     gravity_model::NormalizedGravityModel
@@ -74,7 +74,7 @@ function QLawParams(
     oe0,
     oet,
     oeTols,
-    iau::Orient.IAUModel,
+    fs::FrameSystem,
     mdl::NormalizedGravityModel; ### MANDATORY INPUTS END HERE ###
     mu::Float64=GRAV_PARAMS[399], #Defaults to earth
     mu_sun::Float64=GRAV_PARAMS[10], #helpful to carry this around, not totally necessary
@@ -119,7 +119,7 @@ function QLawParams(
 
     qlawparam = QLawParams{type}(sc, eph, mu, mu_sun, alpha, beta, eclipsed, oe0, oet, oeTols, Woe, Wp, 
         Aimp, kimp, Aesc, kesc, rp_min, a_esc, m_petro, n_petro, r_petro, alpha_min, alpha_max, beta_min, beta_max, step_size, max_sim_time, abstol, reltol,
-        iau, mdl, mdl_j2, writeData)
+        fs, mdl, mdl_j2, writeData)
 
     return qlawparam
 end
