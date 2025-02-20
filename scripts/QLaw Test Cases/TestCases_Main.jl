@@ -8,7 +8,9 @@ using BenchmarkTools
 furnsh(datadir("naif0012.tls"))
 furnsh(datadir("de440.bsp"))
 ## END SPICE SETUP
-plot = false
+
+# ====== Plot? (true/false)
+plot = true
 # ====== SELECT CASE
 CASE_ID = "E"   # Current cases: A-G
 include("TestCase_info.jl") # file that includes the test case selector function

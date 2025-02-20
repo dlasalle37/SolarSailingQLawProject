@@ -301,3 +301,20 @@ function get_mean_radius(id)
     r = CELESTIAL_RADII[id]
     return r
 end
+
+
+"""
+function sign_smooth(x, k)
+
+    smooth sign function with hyperbolic tangent approximation
+
+# Inputs:
+    - x: input to the sign function
+    - k: smoothing factor
+# Outputs:
+    - sgn: smoothed sign of x
+"""
+function sign_smooth(x, k)
+    sgn = tanh(k*x)
+    return sgn
+end
