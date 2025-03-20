@@ -214,11 +214,20 @@ function calculate_Q(t, x, params::QLawParams{Oguri})
         distape = acos(cos(ape - ape_t));
         distlam = acos(cos(lam-lam_t));
         # Sign Functions
+#=        
         sig_a = sign(dista);
         sig_e = sign(diste);
         sig_inc = sign(distinc);
         sig_ape = sign(distape);
         sig_lam = sign(distlam);
+        =#
+        # for smoothed sign investigation:
+        κ = 1e5; # smoothing parameter
+        sig_a   = sign_smooth(dista, κ);
+        sig_e   = sign_smooth(diste, κ);
+        sig_inc = sign_smooth(distinc, κ);
+        sig_ape = sign_smooth(distape, κ);
+        sig_lam = sign_smooth(distlam, κ);
 
         # Sunlight direction in perifocal frame
         svec_P = @SArray [
@@ -248,7 +257,9 @@ function calculate_Q(t, x, params::QLawParams{Oguri})
         # Semi-major axis:
         nustar_a = atan(sig_a*se, -sig_a*sp)
         adotnn = oedotnn(a, e, inc, ape, lam, nustar_a, sig_a, eps_a, nudot, nudot_earth, params, t)
-        tau_a = abs(dista)/-adotnn  # best-case ttg term
+        
+        #tau_a = abs(dista)/-adotnn  # best-case ttg term
+        tau_a = abs_smooth(dista)/-adotnn
         
         # Ecccentricity
             # For eccentricity, two edotnn's are computed and compared, smaller is taken and used in Q
@@ -269,12 +280,15 @@ function calculate_Q(t, x, params::QLawParams{Oguri})
             edotnn = clip_val
         end
 
-        tau_e = abs(diste)/-edotnn
+        #tau_e = abs(diste)/-edotnn
+        tau_e = abs_smooth(diste)/-edotnn
         
         # Inclination
-        nustar_inc = pi/2 - ape + sign(sig_inc*sh)*(asin(e*sin(ape))+pi/2)
+        nustar_inc = pi/2 - ape + sign_smooth(sig_inc*sh, κ)*(asin(e*sin(ape))+pi/2)
         incdotnn = oedotnn(a, e, inc, ape, lam, nustar_inc, sig_inc, eps_inc, nudot, nudot_earth, params, t)
-        tau_inc = abs(distinc)/-incdotnn
+        
+        #tau_inc = abs(distinc)/-incdotnn
+        tau_inc = abs_smooth(distinc)/-incdotnn
 
         # Argument of periapsis
         if Wape == 0.0
@@ -290,16 +304,18 @@ function calculate_Q(t, x, params::QLawParams{Oguri})
 
             # From here, it is the same as the others
             apedotnn = oedotnn(a, e, inc, ape, lam, nustar_ape, sig_ape, eps_ape, nudot, nudot_earth, params, t)
-            tau_ape = abs(distape)/-apedotnn
+            #tau_ape = abs(distape)/-apedotnn
+            tau_ape = abs_smooth(distape)/-apedotnn
         end
 
         # Longitude of ascending node from ir (lambda)
         if Wlam == 0.0
             tau_lam = 0.0
         else # only calculate if Wlam !=0
-            nustar_lam = pi - ape + sign(sig_lam*sh/sin(inc))*acos(e*cos(ape))
+            nustar_lam = pi - ape + sign_smooth(sig_lam*sh/sin(inc), κ)*acos(e*cos(ape))
             lamdotnn = oedotnn(a, e, inc, ape, lam, nustar_lam, sig_lam, eps_lam, nudot, nudot_earth, params, t)
-            tau_lam = abs(distlam)/-lamdotnn
+            #tau_lam = abs(distlam)/-lamdotnn
+            tau_lam = abs_smooth(distlam)/-lamdotnn
         end
 
         ###################################################################################################################################################
@@ -396,11 +412,19 @@ function calculate_Q(t, x, params::QLawParams{Keplerian})
     distran = acos(cos(ran-ran_t));
 
     # Sign Functions
-    sig_a = sign(dista);
+#=     sig_a = sign(dista);
     sig_e = sign(diste);
     sig_inc = sign(distinc);
     sig_ape = sign(distape);
     sig_ran = sign(distran);
+ =#
+    # for smoothed sign investigation:
+    κ = 1e5; # smoothing parameter
+    sig_a   = sign_smooth(dista, κ);
+    sig_e   = sign_smooth(diste, κ);
+    sig_inc = sign_smooth(distinc, κ);
+    sig_ape = sign_smooth(distape, κ);
+    sig_ran = sign_smooth(distran, κ);
 
     # Sunlight direction in perifocal frame
     svec_P = @SArray [
@@ -451,7 +475,8 @@ function calculate_Q(t, x, params::QLawParams{Keplerian})
     tau_e = abs(diste)/-edotnn
     
     # Inclination
-    nustar_inc = pi/2 - ape + sign(sig_inc*sh)*(asin(e*sin(ape))+pi/2)
+    #nustar_inc = pi/2 - ape + sign(sig_inc*sh)*(asin(e*sin(ape))+pi/2)
+    nustar_inc = pi/2 - ape + sign_smooth(sig_inc*sh, κ)*(asin(e*sin(ape))+pi/2)  # smoothed sign investigation
     incdotnn = oedotnn(a, e, inc, ape, lam, nustar_inc, sig_inc, eps_inc, nudot, params, t)
     #~, incdotnn = gss(nu->oedotnn_j2(a, e, inc, ape, lam, nu, sig_inc, eps_inc, nudot, params, t, ran), 0, 2*pi)
     tau_inc = abs(distinc)/-incdotnn
@@ -478,7 +503,8 @@ function calculate_Q(t, x, params::QLawParams{Keplerian})
     if Wran == 0.0
         tau_ran = 0.0
     else # only calculate if Wran !=0
-        nustar_ran = pi - ape + sign(sig_ran*sh/sin(inc))*acos(e*cos(ape))
+        #nustar_ran = pi - ape + sign(sig_ran*sh/sin(inc))*acos(e*cos(ape))
+        nustar_ran = pi - ape + sign_smooth(sig_ran*sh/sin(inc), κ)*acos(e*cos(ape)) # smoothed sign investigation
         randotnn = oedotnn(a, e, inc, ape, lam, nustar_ran, sig_ran, eps_ran, nudot, params, t)
         #~, randotnn = gss(nu->oedotnn_j2(a, e, inc, ape, lam, nu, sig_ran, eps_ran, nudot, params, t, ran), 0, 2*pi)
         tau_ran = abs(distran)/-randotnn

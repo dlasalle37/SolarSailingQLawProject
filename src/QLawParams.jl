@@ -11,10 +11,10 @@ mutable struct QLawParams{T<:QLawType}
     mu::Float64
     mu_sun::Float64
 
-    # Living Parameters
+#=     # Living Parameters
     alpha::Float64 # control angle alpha [rad]
     beta::Float64 # control angle beta [rad]
-    eclipsed::Bool
+    eclipsed::Bool =#
 
     #Initial oe's
     oe0::Vector{Float64}
@@ -117,7 +117,7 @@ function QLawParams(
     l = datadir("EGM96_to360.ascii")
     mdl_j2 = NormalizedGravityModel(n, m, l, R=6378.139, mu=398600.4418);
 
-    qlawparam = QLawParams{type}(sc, eph, mu, mu_sun, alpha, beta, eclipsed, oe0, oet, oeTols, Woe, Wp, 
+    qlawparam = QLawParams{type}(sc, eph, mu, mu_sun, #= alpha, beta, eclipsed, =# oe0, oet, oeTols, Woe, Wp, 
         Aimp, kimp, Aesc, kesc, rp_min, a_esc, m_petro, n_petro, r_petro, alpha_min, alpha_max, beta_min, beta_max, step_size, max_sim_time, abstol, reltol,
         fs, mdl, mdl_j2, writeData)
 

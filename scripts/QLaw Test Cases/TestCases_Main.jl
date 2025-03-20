@@ -12,7 +12,7 @@ furnsh(datadir("de440.bsp"))
 # ====== Plot? (true/false)
 plot = true
 # ====== SELECT CASE
-CASE_ID = "E"   # Current cases: A-G
+CASE_ID = "A"   # Current cases: A-G (A-C: Oguri, D-G:Keplerian)
 include("TestCase_info.jl") # file that includes the test case selector function
 
 

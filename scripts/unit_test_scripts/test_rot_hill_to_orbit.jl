@@ -10,7 +10,7 @@ x =  [9210.977469508176;
 89.99992476532344;
 1.6200477652642002;] # radians
 
-i = x[3]; ape = x[4]; lam = x[5]; tru = x[6];
+inc = x[3]; ape = x[4]; lam = x[5]; tru = x[6];
 res_test = hill_to_orbit_transform(i, ape, lam, tru)
 
 # Check
