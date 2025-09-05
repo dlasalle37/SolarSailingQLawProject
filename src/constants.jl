@@ -28,8 +28,7 @@ Example calculation for earth: from Oguri: Solar Sailing Primer Vector Theory
     c = 2.998E5 km/s is the speed of light
     G0_e = 1366*(1.496E8)^2/2.998E5 = 1.02E14 kgkm/s^2
 """
-global SOLAR_FLUXES=Dict{Int, Any}(  # Source: NASA solar system fact sheets https://nssdc.gsfc.nasa.gov/planetary/factsheet
-    10 => nothing, 
+global SOLAR_FLUXES=Dict{Int, Float64}(  # Source: NASA solar system fact sheets https://nssdc.gsfc.nasa.gov/planetary/factsheet
     399 => 1.02E14, #[kgkm/s^2]
     499 => 586.2*(1.52*1.496E8)^2/2.998E5, #mars: E_m=586.2W/m^2, d_m = 1.52AU, c = 2.998E5
 )

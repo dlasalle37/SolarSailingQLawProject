@@ -11,11 +11,6 @@ mutable struct QLawParams{T<:QLawType}
     mu::Float64
     mu_sun::Float64
 
-#=     # Living Parameters
-    alpha::Float64 # control angle alpha [rad]
-    beta::Float64 # control angle beta [rad]
-    eclipsed::Bool =#
-
     #Initial oe's
     oe0::Vector{Float64}
 
@@ -47,6 +42,10 @@ mutable struct QLawParams{T<:QLawType}
     alpha_max::Float64
     beta_min::Float64
     beta_max::Float64
+
+    # smoothing parameters
+    ksgn::Float64
+    kabs::Float64
 
     # Integration Parameters
     step_size::Float64  # time step size 
@@ -93,8 +92,8 @@ function QLawParams(
     alpha_max::Float64=pi/2,
     beta_min::Float64=-pi,
     beta_max::Float64=1.0*pi,
-    beta=0.0,
-    alpha=0.0,
+    ksgn=1.e5,
+    kabs=0.01,
     step_size=60.0, #seconds
     max_sim_time = 100*86400.0, # seconds (days*sec/day)
     abstol=1.0E-6,
@@ -118,8 +117,8 @@ function QLawParams(
     mdl_j2 = NormalizedGravityModel(n, m, l, R=6378.139, mu=398600.4418);
 
     qlawparam = QLawParams{type}(sc, eph, mu, mu_sun, #= alpha, beta, eclipsed, =# oe0, oet, oeTols, Woe, Wp, 
-        Aimp, kimp, Aesc, kesc, rp_min, a_esc, m_petro, n_petro, r_petro, alpha_min, alpha_max, beta_min, beta_max, step_size, max_sim_time, abstol, reltol,
-        fs, mdl, mdl_j2, writeData)
+        Aimp, kimp, Aesc, kesc, rp_min, a_esc, m_petro, n_petro, r_petro, alpha_min, alpha_max, beta_min, beta_max, ksgn, kabs,
+        step_size, max_sim_time, abstol, reltol, fs, mdl, mdl_j2, writeData)
 
     return qlawparam
 end

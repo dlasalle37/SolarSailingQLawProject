@@ -264,7 +264,9 @@ function interpolate(spline::CubicSpline{T,U,V}, x) where {T,U,V}
     xvec = SVector(xxx, xx, x, 1.0)
     cmat = transpose(view(spline.c, 1 + 4*(idx - 1):4*idx, :))
     mul!(spline.y, cmat, xvec)
-    return SVector(spline.y...)
+    @infiltrate false
+    return SA[spline.y[1]; spline.y[2]; spline.y[3]] 
+    #return SVector(spline.y...)
 end
 
 """
@@ -382,6 +384,7 @@ function getPositionPartials(spline::CubicSpline, x)
     drdx = Vector{typeof(x)}(undef, size(cmat, 1))
     mul!(drdx, cmat, xvec)
 
-    return SVector(drdx...)
+    return SA[drdx[1], drdx[2], drdx[3]]
+    #return SVector(drdx...)
 
 end

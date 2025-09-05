@@ -28,5 +28,10 @@ include("EOMs.jl")
 include("QLaw.jl")
 include("QLawIntegrator.jl")
 include("LineSearch.jl")
-
+include("QLawPartials/dQda_an.jl")
+include("QLawPartials/dQde_an.jl")
+include("QLawPartials/dQdinc_an.jl")
+include("QLawPartials/dQdape_an.jl")
+include("QLawPartials/dQdlam_an.jl")
+include("QLawPartials/QLawPartials.jl")
 # Setups

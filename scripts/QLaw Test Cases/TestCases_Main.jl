@@ -10,9 +10,9 @@ furnsh(datadir("de440.bsp"))
 ## END SPICE SETUP
 
 # ====== Plot? (true/false)
-plot = true
+showplot = true
 # ====== SELECT CASE
-CASE_ID = "A"   # Current cases: A-G (A-C: Oguri, D-G:Keplerian)
+CASE_ID = "C"   # Current cases: A-G (A-C: Oguri, D-G:Keplerian)
 include("TestCase_info.jl") # file that includes the test case selector function
 
 
@@ -74,6 +74,7 @@ ccb = ContinuousCallback(condition, affect!)
 
 # ====== Run solve function to solve DE
 sol = @btime solve(prob, AutoTsit5(Rosenbrock23()), saveat=60, callback=ccb);
+#sol = @btime solve(prob, Vern9(), saveat=60, callback=ccb);
 
 
 
@@ -140,7 +141,7 @@ end
 
 # ===== Plotting
 # First read the data
-if plot
+if showplot
     kep = readdlm(datadir("kep.txt"), '\t', '\n'; header=false)
     cart = readdlm(datadir("cart.txt"), '\t', '\n'; header=false)
 

@@ -95,7 +95,6 @@ function aSRP(u, sc::basicSolarSail, eph::Ephemeride, t)
     C1 = sc.C[1]
     C2 = sc.C[2]
     C3 = sc.C[3]
-    C1 = sc.C[1]; C2 = sc.C[2]; C3 = sc.C[3]
 
     # Ephemeride-based calculations
     ephState = getState(eph, t)

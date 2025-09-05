@@ -285,8 +285,13 @@ function get_solar_flux(id): get the solar flux constant of a celestial body by 
     
     dependencies: Info is pulled from SOLAR_FLUXES dictionary in constants.jl
 """
-function get_solar_flux(id) 
-    G0 = SOLAR_FLUXES[id] 
+function get_solar_flux(id)
+    # note dictionaries are not type stable
+    if id == 399
+        G0 = 1.02e14
+    else
+        G0 = 0.0
+    end
     return G0
 end
 
@@ -324,11 +329,19 @@ function abs_smooth(x, k=0.01)
     smooth absolute value approximation from: `Sigmoid functions for the smooth approximation to the absolute value function` by `Bagul` and `Chesneau` doi: `10.2478/mjpaa-2021-0002`
 # Inputs:
     - x: input to the abs function
-    - k: smoothing factor. From reference, approx global L2 errors versus k-values:\n`k=0.1` -> `err=0.000158151` and `k=0.01` -> `err=1.58151e-7`
+    - k: smoothing factor. From reference, approx global L2 errors versus k-values:\n`k=0.1` -> `err=0.000158151` and `k=0.01` -> `err=1.58151e-7` Recommended `k=0.01`
 # Outputs:
     - abs_approx: smoothed abs of x
 """
 function abs_smooth(x, k=0.01)
     abs_approx = x*tanh(x/k)
     return abs_approx
+end
+
+"""
+    function pow(x, y)
+C function pow, returns `x^y`
+"""
+function pow(x, y)
+    return x^y
 end
